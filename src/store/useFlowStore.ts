@@ -83,6 +83,17 @@ interface FlowState {
   sendEmailReply: (emailId: string, body: string) => Promise<void>;
   
   updateEmailStatus: (emailId: string, status: EmailStatus, error?: string) => Promise<void>;
+  updateEmailFields: (emailId: string, fields: Record<string, string>, status?: EmailStatus, error?: string) => Promise<void>;
+  updateEmailItems: (emailId: string, items: OrderItemMapped[], status?: EmailStatus, error?: string) => Promise<void>;
+  receiveEmailWithDocument: (emailData: {
+    senderName: string;
+    senderEmail: string;
+    subject: string;
+    rawBody: string;
+    attachmentName?: string;
+    cnpj?: string;
+    items?: OrderItemExtracted[];
+  }) => Promise<void>;
   sendEmailToErp: (emailId: string) => Promise<boolean>;
   sendBulkToErp: (emailIds: string[]) => Promise<{ success: number; failed: number }>;
   receiveSimulatedEmail: (customEmail?: Partial<EmailOrderData>) => Promise<void>;
@@ -93,6 +104,7 @@ interface FlowState {
   updateErpConnection: (id: string, conn: Partial<ERPConnection>) => Promise<void>;
   erpGeneralInstruction: string;
   setErpGeneralInstruction: (instruction: string) => void;
+
   completeOnboardingStep: (step: number) => Promise<void>;
   resetAllData: () => Promise<void>;
   testPromptExtraction: (prompt: string, emailBody: string) => Promise<Record<string, string>>;
@@ -716,7 +728,8 @@ export const useFlowStore = create<FlowState>((set, get) => ({
 
     set({ isLoading: true, isOfflineMode: false });
     try {
-      const [
+      // 1. Initial read
+      let [
         { data: cat },
         { data: dp },
         { data: dpc },
@@ -736,33 +749,210 @@ export const useFlowStore = create<FlowState>((set, get) => ({
         supabase.from('settings').select('*')
       ]);
 
-      if (cat) {
-        set({ catalog: cat.map(p => ({ code: p.code, name: p.name, description: p.description || '', category: p.category, price: parseFloat(p.price), unit: p.unit })) });
+      let activeCat = cat || [];
+      let activeDp = dp || [];
+      let activeDpc = dpc || [];
+      let activeCust = cust || [];
+      let activeFields = fields || [];
+      let activeEms = ems || [];
+      let activeConns = conns || [];
+      let activeSets = sets || [];
+
+      // 2. Auto-seed catalog if empty
+      if (activeCat.length === 0) {
+        await supabase.from('catalog_products').insert(defaultCatalog);
+        const { data: newCat } = await supabase.from('catalog_products').select('*');
+        if (newCat) activeCat = newCat;
       }
-      if (dp) {
-        set({ dePara: dp.map(d => ({ id: d.id, incomingTerm: d.incoming_term, catalogCode: d.catalog_code, confidence: d.confidence, status: d.status })) });
+
+      // 3. Auto-seed erp_customers if empty
+      if (activeCust.length === 0) {
+        const dbCust = defaultErpCustomers.map(c => ({ id: c.id, cnpj: c.cnpj, razao_social: c.razaoSocial }));
+        await supabase.from('erp_customers').insert(dbCust);
+        const { data: newCust } = await supabase.from('erp_customers').select('*');
+        if (newCust) activeCust = newCust;
       }
-      if (dpc) {
-        set({ deParaClientes: dpc.map(d => ({ id: d.id, incomingCnpj: d.incoming_cnpj || undefined, incomingEmail: d.incoming_email || undefined, incomingName: d.incoming_name, erpCustomerCode: d.erp_customer_code, status: d.status })) });
+
+      // 4. Auto-seed depara_mappings if empty
+      if (activeDp.length === 0) {
+        const dbDp = defaultDePara.map(d => ({ id: d.id, incoming_term: d.incomingTerm, catalog_code: d.catalogCode, confidence: d.confidence, status: d.status }));
+        await supabase.from('depara_mappings').insert(dbDp);
+        const { data: newDp } = await supabase.from('depara_mappings').select('*');
+        if (newDp) activeDp = newDp;
       }
-      if (cust) {
-        set({ erpCustomers: cust.map(c => ({ id: c.id, cnpj: c.cnpj, razaoSocial: c.razao_social })) });
+
+      // 5. Auto-seed depara_clientes if empty
+      if (activeDpc.length === 0) {
+        const dbDpc = defaultDeParaClientes.map(d => ({ id: d.id, incoming_cnpj: d.incomingCnpj, incoming_name: d.incomingName, erp_customer_code: d.erpCustomerCode, status: d.status }));
+        await supabase.from('depara_clientes').insert(dbDpc);
+        const { data: newDpc } = await supabase.from('depara_clientes').select('*');
+        if (newDpc) activeDpc = newDpc;
       }
-      if (fields && fields.length > 0) {
-        set({ erpFields: fields.map(f => ({ id: f.id, name: f.name, label: f.label, type: f.type as any, required: f.required, aiInstruction: f.ai_instruction, defaultValue: f.default_value || undefined, validationRule: f.validation_rule || undefined })) });
+
+      // 6. Auto-seed erp_layout_fields if empty
+      if (activeFields.length === 0) {
+        const currentActiveErp = get().activeErp || 'Bling';
+        const fieldsToInsert = (erpPresets[currentActiveErp] || erpPresets.Bling).map(f => ({
+          id: f.id,
+          name: f.name,
+          label: f.label,
+          type: f.type,
+          required: f.required,
+          ai_instruction: f.aiInstruction,
+          default_value: f.defaultValue || null,
+          validation_rule: f.validationRule || null
+        }));
+        await supabase.from('erp_layout_fields').insert(fieldsToInsert);
+        const { data: newFields } = await supabase.from('erp_layout_fields').select('*');
+        if (newFields) activeFields = newFields;
       }
-      if (ems) {
-        set({ emails: ems.map(e => ({ id: e.id, senderName: e.sender_name, senderEmail: e.sender_email, subject: e.subject, receivedAt: e.received_at, status: e.status as any, rawBody: e.raw_body, extractedFields: e.extracted_fields, mappedFields: e.mapped_fields, items: e.items, rawItems: e.raw_items, erpTarget: e.erp_target, errorMessage: e.error_message || undefined, confidenceScore: e.confidence_score, replies: e.replies || [] })) });
+
+      // 7. Auto-seed settings if empty
+      if (activeSets.length === 0) {
+        await supabase.from('settings').insert({
+          id: 'global_settings',
+          company_name: 'Softeum Logística Integrada Ltda',
+          ai_enabled: true,
+          confidence_threshold: 80,
+          notify_errors: true,
+          notify_daily_summary: true,
+          usage_count: 1420,
+          usage_limit: 5000
+        });
+        const { data: newSets } = await supabase.from('settings').select('*');
+        if (newSets) activeSets = newSets;
       }
-      if (conns && conns.length > 0) {
-        set({ erpConnections: conns.filter(c => c.id !== 'email').map(c => ({ id: c.id, name: c.name, logo: c.logo || '', connected: c.connected, apiKey: c.api_key || '', baseUrl: c.base_url || '', lastSyncTime: c.last_sync_time || undefined })) });
-        const emailC = conns.find(c => c.id === 'email');
+
+      // 8. Auto-seed connections if empty
+      if (activeConns.length === 0) {
+        const dbConns = defaultErpConnections.map(c => ({
+          id: c.id,
+          name: c.name,
+          logo: c.logo,
+          connected: c.connected,
+          api_key: c.apiKey || null,
+          base_url: c.baseUrl || null,
+          last_sync_time: c.lastSyncTime || null,
+          extra_config: {}
+        }));
+        dbConns.push({
+          id: 'email',
+          name: 'Conexão IMAP E-mail',
+          logo: 'E',
+          connected: true,
+          api_key: null,
+          base_url: null,
+          last_sync_time: '27/05/2026 18:00',
+          extra_config: { provider: 'IMAP', imapHost: 'imap.secureserver.net', imapPort: 993, imapUser: 'compras@softeum.com.br' } as any
+        });
+        await supabase.from('connections').insert(dbConns);
+        const { data: newConns } = await supabase.from('connections').select('*');
+        if (newConns) activeConns = newConns;
+      }
+
+      // 9. Auto-seed emails if empty
+      if (activeEms.length === 0) {
+        const dbEms = defaultEmails.map(e => ({
+          id: e.id,
+          sender_name: e.senderName,
+          sender_email: e.senderEmail,
+          subject: e.subject,
+          received_at: e.receivedAt,
+          status: e.status,
+          raw_body: e.rawBody,
+          extracted_fields: e.extractedFields,
+          mapped_fields: e.mappedFields,
+          items: e.items,
+          raw_items: e.rawItems,
+          erp_target: e.erpTarget,
+          error_message: e.errorMessage || null,
+          confidence_score: e.confidenceScore,
+          replies: e.replies || [],
+          chat_messages: e.chatMessages || [],
+          is_opened: e.isOpened || false,
+          attachment_name: e.attachmentName || null,
+          erp_payload_sent: e.erpPayloadSent || null,
+          erp_response_log: e.erpResponseLog || null
+        }));
+        
+        try {
+          await supabase.from('emails_orders').insert(dbEms);
+        } catch (e) {
+          // If columns don't exist yet, retry without custom columns
+          const fallbackEms = dbEms.map(fe => ({
+            id: fe.id,
+            sender_name: fe.sender_name,
+            sender_email: fe.sender_email,
+            subject: fe.subject,
+            received_at: fe.received_at,
+            status: fe.status,
+            raw_body: fe.raw_body,
+            extracted_fields: fe.extracted_fields,
+            mapped_fields: fe.mapped_fields,
+            items: fe.items,
+            raw_items: fe.raw_items,
+            erp_target: fe.erp_target,
+            error_message: fe.error_message,
+            confidence_score: fe.confidence_score,
+            attachment_name: fe.attachment_name,
+            erp_payload_sent: fe.erp_payload_sent,
+            erp_response_log: fe.erp_response_log
+          }));
+          await supabase.from('emails_orders').insert(fallbackEms);
+        }
+        const { data: newEms } = await supabase.from('emails_orders').select('*');
+        if (newEms) activeEms = newEms;
+      }
+
+      // Map database tables to store state
+      if (activeCat) {
+        set({ catalog: activeCat.map(p => ({ code: p.code, name: p.name, description: p.description || '', category: p.category, price: parseFloat(p.price), unit: p.unit })) });
+      }
+      if (activeDp) {
+        set({ dePara: activeDp.map(d => ({ id: d.id, incomingTerm: d.incoming_term, catalogCode: d.catalog_code, confidence: d.confidence, status: d.status })) });
+      }
+      if (activeDpc) {
+        set({ deParaClientes: activeDpc.map(d => ({ id: d.id, incomingCnpj: d.incoming_cnpj || undefined, incomingEmail: d.incoming_email || undefined, incomingName: d.incoming_name, erpCustomerCode: d.erp_customer_code, status: d.status })) });
+      }
+      if (activeCust) {
+        set({ erpCustomers: activeCust.map(c => ({ id: c.id, cnpj: c.cnpj, razaoSocial: c.razao_social })) });
+      }
+      if (activeFields && activeFields.length > 0) {
+        set({ erpFields: activeFields.map(f => ({ id: f.id, name: f.name, label: f.label, type: f.type as any, required: f.required, aiInstruction: f.ai_instruction, defaultValue: f.default_value || undefined, validationRule: f.validation_rule || undefined })) });
+      }
+      if (activeEms) {
+        set({ emails: activeEms.map(e => ({ 
+          id: e.id, 
+          senderName: e.sender_name, 
+          senderEmail: e.sender_email, 
+          subject: e.subject, 
+          receivedAt: e.received_at, 
+          status: e.status as any, 
+          rawBody: e.raw_body, 
+          extractedFields: e.extracted_fields, 
+          mappedFields: e.mapped_fields, 
+          items: e.items, 
+          rawItems: e.raw_items, 
+          erpTarget: e.erp_target, 
+          errorMessage: e.error_message || undefined, 
+          confidenceScore: e.confidence_score, 
+          replies: e.replies || [],
+          chatMessages: e.chat_messages || e.chatMessages || [],
+          isOpened: e.is_opened || e.isOpened || false,
+          attachmentName: e.attachment_name || undefined,
+          erpPayloadSent: e.erp_payload_sent || undefined,
+          erpResponseLog: e.erp_response_log || undefined
+        })) });
+      }
+      if (activeConns && activeConns.length > 0) {
+        set({ erpConnections: activeConns.filter(c => c.id !== 'email').map(c => ({ id: c.id, name: c.name, logo: c.logo || '', connected: c.connected, apiKey: c.api_key || '', baseUrl: c.base_url || '', lastSyncTime: c.last_sync_time || undefined })) });
+        const emailC = activeConns.find(c => c.id === 'email');
         if (emailC) {
           set({ emailConnection: { provider: emailC.extra_config.provider || 'IMAP', connected: emailC.connected, lastSyncTime: emailC.last_sync_time || undefined, imapHost: emailC.extra_config.imapHost, imapPort: emailC.extra_config.imapPort, imapUser: emailC.extra_config.imapUser } });
         }
       }
-      if (sets && sets.length > 0) {
-        const s = sets[0];
+      if (activeSets && activeSets.length > 0) {
+        const s = activeSets[0];
         set({
           settings: {
             companyName: s.company_name,
@@ -773,7 +963,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
             notifyDailySummary: s.notify_daily_summary,
             usageCount: s.usage_count,
             usageLimit: s.usage_limit,
-            teamMembers: get().settings.teamMembers, // Maintain team locally
+            teamMembers: get().settings.teamMembers,
             replyTemplateConfirm: s.reply_template_confirm || get().settings.replyTemplateConfirm,
             replyTemplateInconsistency: s.reply_template_inconsistency || get().settings.replyTemplateInconsistency,
             replyTemplateNoRegistration: s.reply_template_no_registration || get().settings.replyTemplateNoRegistration,
@@ -1653,6 +1843,263 @@ export const useFlowStore = create<FlowState>((set, get) => ({
         error_message: error || null
       }).eq('id', emailId);
     }
+  },
+
+  updateEmailFields: async (emailId, fields, status, error) => {
+    set((state) => {
+      const next = state.emails.map((e) => {
+        if (e.id === emailId) {
+          const updated = {
+            ...e,
+            extractedFields: { ...e.extractedFields, ...fields },
+            mappedFields: { ...e.mappedFields, ...fields }
+          };
+          if (status !== undefined) updated.status = status;
+          if (error !== undefined) updated.errorMessage = error;
+          return updated;
+        }
+        return e;
+      });
+      saveLocalData('emails', next);
+      return { emails: next };
+    });
+
+    if (isSupabaseConfigured && supabase) {
+      const updatedEmail = get().emails.find(e => e.id === emailId);
+      if (updatedEmail) {
+        await supabase.from('emails_orders').update({
+          extracted_fields: updatedEmail.extractedFields,
+          mapped_fields: updatedEmail.mappedFields,
+          status: updatedEmail.status,
+          error_message: updatedEmail.errorMessage || null
+        }).eq('id', emailId);
+      }
+    }
+  },
+
+  updateEmailItems: async (emailId, items, status, error) => {
+    set((state) => {
+      const next = state.emails.map((e) => {
+        if (e.id === emailId) {
+          const updated = {
+            ...e,
+            items
+          };
+          if (status !== undefined) updated.status = status;
+          if (error !== undefined) updated.errorMessage = error;
+          return updated;
+        }
+        return e;
+      });
+      saveLocalData('emails', next);
+      return { emails: next };
+    });
+
+    if (isSupabaseConfigured && supabase) {
+      const updatedEmail = get().emails.find(e => e.id === emailId);
+      if (updatedEmail) {
+        await supabase.from('emails_orders').update({
+          items: updatedEmail.items,
+          status: updatedEmail.status,
+          error_message: updatedEmail.errorMessage || null
+        }).eq('id', emailId);
+      }
+    }
+  },
+
+  receiveEmailWithDocument: async (data) => {
+    const emailId = `email-${Math.floor(1000 + Math.random() * 9000)}`;
+    const now = new Date();
+    const formattedDate = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+    let cnpj = data.cnpj || '';
+    if (!cnpj) {
+      const match = data.rawBody.match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}\-?\d{2}/);
+      cnpj = match ? match[0].replace(/\D/g, '') : '';
+    }
+
+    const cnpjClean = cnpj.replace(/\D/g, '');
+    const isRegistered = get().erpCustomers.some(c => c.cnpj.replace(/\D/g, '') === cnpjClean);
+    const hasClientMapping = get().deParaClientes.some(c => 
+      (c.incomingCnpj && c.incomingCnpj === cnpj) ||
+      (c.incomingEmail && c.incomingEmail === data.senderEmail)
+    );
+
+    const activeErp = get().activeErp;
+    const today = now.toLocaleDateString('pt-BR');
+    
+    const extractedFields: Record<string, string> = {};
+    const erpFields = get().erpFields;
+    
+    erpFields.forEach(f => {
+      if (f.name.includes('cnpj') || f.name.includes('TaxID') || f.name.includes('cgc')) {
+        extractedFields[f.name] = cnpj;
+      } else if (f.name.includes('razao') || f.name.includes('cliente') || f.name.includes('razaoSocial')) {
+        extractedFields[f.name] = data.senderName;
+      } else if (f.name.includes('codigo') || f.name.includes('num') || f.name.includes('PO') || f.name.includes('PurchaseOrder')) {
+        extractedFields[f.name] = `PED-${Math.floor(10000 + Math.random() * 90000)}`;
+      } else if (f.name.includes('data') || f.name.includes('dat') || f.name.includes('previsao')) {
+        extractedFields[f.name] = today;
+      } else if (f.name.includes('condicao') || f.name.includes('Terms')) {
+        extractedFields[f.name] = 'Boleto 30 dias';
+      }
+    });
+
+    let rawItems = data.items || [];
+    if (rawItems.length === 0) {
+      const lines = data.rawBody.split('\n');
+      lines.forEach(line => {
+        const match = line.match(/(?:-\s*)?(\d+)\s*(?:un|x|unidades)?\s*(?:de)?\s*([A-Za-z0-9\sÀ-ÿ]+)/i);
+        if (match) {
+          const qty = parseInt(match[1]);
+          const desc = match[2].trim();
+          if (qty > 0 && desc.length > 2) {
+            const product = get().catalog.find(p => p.name.toLowerCase().includes(desc.toLowerCase()));
+            rawItems.push({
+              rawDescription: desc,
+              quantity: qty,
+              unitPrice: product ? product.price : 10.00
+            });
+          }
+        }
+      });
+    }
+
+    const calculatedValTotal = rawItems.reduce((acc, curr) => acc + curr.quantity * curr.unitPrice, 0);
+    erpFields.forEach(f => {
+      if (f.name.includes('valor') || f.name.includes('total')) {
+        extractedFields[f.name] = calculatedValTotal.toFixed(2);
+      }
+    });
+
+    const mappedItems: OrderItemMapped[] = rawItems.map((raw) => {
+      const clientMappings = get().dePara.filter(
+        (m) => m.incomingTerm.toLowerCase() === raw.rawDescription.toLowerCase() && m.isActive !== false
+      );
+      const mapping = clientMappings.find(m => m.clientCnpj && m.clientCnpj.replace(/\D/g, '') === cnpjClean) || clientMappings.find(m => !m.clientCnpj);
+      const product = mapping 
+        ? get().catalog.find((p) => p.code === mapping.catalogCode) 
+        : get().catalog.find((p) => p.name.toLowerCase().includes(raw.rawDescription.toLowerCase()) || raw.rawDescription.toLowerCase().includes(p.name.toLowerCase()));
+      
+      if (product) {
+        return {
+          catalogCode: product.code,
+          catalogName: product.name,
+          quantity: raw.quantity,
+          unitPrice: product.price,
+          totalPrice: product.price * raw.quantity,
+          unit: product.unit
+        };
+      }
+      return {
+        catalogCode: 'PENDENTE',
+        catalogName: `Aguardando mapeamento: "${raw.rawDescription}"`,
+        quantity: raw.quantity,
+        unitPrice: raw.unitPrice,
+        totalPrice: raw.unitPrice * raw.quantity,
+        unit: 'UN'
+      };
+    });
+
+    const hasPendingSku = mappedItems.some(it => it.catalogCode === 'PENDENTE');
+    const isClientMissing = !isRegistered && !hasClientMapping;
+    
+    let status: EmailStatus = 'Aguardando';
+    let errorMessage: string | undefined = undefined;
+
+    if (isClientMissing) {
+      status = 'Revisão Manual';
+      errorMessage = `Erro de Pré-cadastro: O CNPJ do cliente (${cnpj ? formatCNPJ(cnpj) : 'não encontrado'}) ou e-mail de origem (${data.senderEmail}) não está pré-cadastrado no ERP.`;
+    } else if (hasPendingSku) {
+      status = 'Revisão Manual';
+      errorMessage = 'Erro de De-Para: O pedido contém itens com código de catálogo pendente de mapeamento.';
+    }
+
+    const generatedChat = [
+      { id: `msg-${Date.now()}-1`, sender: 'buyer' as const, text: data.rawBody, timestamp: formattedDate },
+      { id: `msg-${Date.now()}-2`, sender: 'agent' as const, text: isClientMissing 
+        ? `Olá! Recebi seu e-mail. No entanto, não localizei seu CNPJ (${cnpj ? formatCNPJ(cnpj) : 'vazio'}) cadastrado no ERP. Encaminhei o caso para nossa equipe fazer o pré-cadastro comercial.`
+        : hasPendingSku 
+          ? `Olá! Pedido recebido de ${data.senderName}. Detectei alguns produtos que precisam de associação de SKU. Um atendente irá analisar o catálogo para liberar seu faturamento.`
+          : `Olá! Identifiquei o pedido de ${data.senderName} no valor de R$ ${calculatedValTotal.toFixed(2)}. Todos os produtos foram mapeados com sucesso. O faturamento está pronto!`, 
+        timestamp: formattedDate }
+    ];
+
+    const newEmail: EmailOrderData = {
+      id: emailId,
+      senderName: data.senderName,
+      senderEmail: data.senderEmail,
+      subject: data.subject,
+      receivedAt: formattedDate,
+      status,
+      rawBody: data.rawBody,
+      extractedFields,
+      mappedFields: extractedFields,
+      rawItems,
+      items: mappedItems,
+      erpTarget: activeErp,
+      errorMessage,
+      confidenceScore: hasPendingSku ? 75 : 95,
+      attachmentName: data.attachmentName,
+      isOpened: false,
+      chatMessages: generatedChat
+    };
+
+    set((state) => {
+      const next = [newEmail, ...state.emails];
+      saveLocalData('emails', next);
+      return { emails: next };
+    });
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase.from('emails_orders').insert({
+          id: newEmail.id,
+          sender_name: newEmail.senderName,
+          sender_email: newEmail.senderEmail,
+          subject: newEmail.subject,
+          received_at: newEmail.receivedAt,
+          status: newEmail.status,
+          raw_body: newEmail.rawBody,
+          extracted_fields: newEmail.extractedFields,
+          mapped_fields: newEmail.mappedFields,
+          items: newEmail.items,
+          raw_items: newEmail.rawItems,
+          erp_target: newEmail.erpTarget,
+          error_message: newEmail.errorMessage || null,
+          confidence_score: newEmail.confidenceScore,
+          attachment_name: newEmail.attachmentName || null,
+          chat_messages: newEmail.chatMessages,
+          is_opened: false
+        });
+
+        if (error && error.code === '42703') { // Column does not exist fallback
+          await supabase.from('emails_orders').insert({
+            id: newEmail.id,
+            sender_name: newEmail.senderName,
+            sender_email: newEmail.senderEmail,
+            subject: newEmail.subject,
+            received_at: newEmail.receivedAt,
+            status: newEmail.status,
+            raw_body: newEmail.rawBody,
+            extracted_fields: newEmail.extractedFields,
+            mapped_fields: newEmail.mappedFields,
+            items: newEmail.items,
+            raw_items: newEmail.rawItems,
+            erp_target: newEmail.erpTarget,
+            error_message: newEmail.errorMessage || null,
+            confidence_score: newEmail.confidenceScore,
+            attachment_name: newEmail.attachmentName || null
+          });
+        }
+      } catch (err) {
+        console.error('Error inserting email to Supabase', err);
+      }
+    }
+
+    toast.success(`E-mail recebido e processado com sucesso!`, {
+      description: status === 'Aguardando' ? 'Pedido pronto para o ERP!' : 'Encaminhado para Revisão Manual.'
+    });
   },
 
   sendEmailToErp: async (emailId) => {

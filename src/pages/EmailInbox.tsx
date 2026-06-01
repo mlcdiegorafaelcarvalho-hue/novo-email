@@ -24,7 +24,9 @@ import {
   Cpu,
   Link2,
   Sparkles,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Plus,
+  Upload
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -45,6 +47,9 @@ export const EmailInbox: React.FC = () => {
   const settings = useFlowStore((state) => state.settings);
   const sendEmailToErp = useFlowStore((state) => state.sendEmailToErp);
   const updateEmailStatus = useFlowStore((state) => state.updateEmailStatus);
+  const updateEmailFields = useFlowStore((state) => state.updateEmailFields);
+  const updateEmailItems = useFlowStore((state) => state.updateEmailItems);
+  const receiveEmailWithDocument = useFlowStore((state) => state.receiveEmailWithDocument);
   const selectedEmailId = useFlowStore((state) => state.selectedEmailId);
   const setSelectedEmailId = useFlowStore((state) => state.setSelectedEmailId);
   
@@ -77,7 +82,42 @@ export const EmailInbox: React.FC = () => {
   const [showProductSuggestions, setShowProductSuggestions] = useState(false);
   const [selectedSkuCode, setSelectedSkuCode] = useState('');
 
+  // Import Email Modal state
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importSenderName, setImportSenderName] = useState('');
+  const [importSenderEmail, setImportSenderEmail] = useState('');
+  const [importSubject, setImportSubject] = useState('');
+  const [importBody, setImportBody] = useState('');
+  const [importAttachmentName, setImportAttachmentName] = useState('');
+  const [importCnpj, setImportCnpj] = useState('');
+  const [isParsingDoc, setIsParsingDoc] = useState(false);
+
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportAttachmentName(file.name);
+    
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    
+    if (ext === 'html' || ext === 'htm' || ext === 'csv' || ext === 'txt') {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        if (text) {
+          setImportBody(prev => prev ? `${prev}\n\n[Conteúdo do anexo ${file.name}]:\n${text}` : text);
+          toast.success(`Arquivo ${file.name} carregado com sucesso!`);
+        }
+      };
+      reader.readAsText(file);
+    } else {
+      toast.info(`Arquivo ${file.name} anexado.`, {
+        description: 'Documentos PDF/Excel serão processados via IA ao clicar em Enviar.'
+      });
+    }
+  };
 
   const filteredEmailCustomers = useMemo(() => {
     const query = customerEmailSearch.toLowerCase();
@@ -201,16 +241,8 @@ export const EmailInbox: React.FC = () => {
       }
     }
 
-    // Update fields locally in store
-    useFlowStore.setState((state) => ({
-      emails: state.emails.map((e) => e.id === selectedEmail.id ? { 
-        ...e, 
-        extractedFields: { ...e.extractedFields, ...editedFields },
-        mappedFields: { ...e.mappedFields, ...editedFields },
-        status: newStatus,
-        errorMessage: newErrorMessage
-      } : e)
-    }));
+    // Update fields in store & database
+    updateEmailFields(selectedEmail.id, editedFields, newStatus, newErrorMessage);
 
     setIsEditing(false);
     toast.success('Campos corrigidos salvos com sucesso!', {
@@ -323,6 +355,22 @@ export const EmailInbox: React.FC = () => {
         
         {/* Search Header */}
         <div className="p-4 border-b border-border/30 bg-white/30 space-y-3">
+          <button
+            onClick={() => {
+              setImportSenderName('');
+              setImportSenderEmail('');
+              setImportSubject('');
+              setImportBody('');
+              setImportAttachmentName('');
+              setImportCnpj('');
+              setIsImportModalOpen(true);
+            }}
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-to-r from-lilas to-azul text-white font-bold text-xs hover:opacity-95 shadow-sm transition cursor-pointer"
+          >
+            <Plus size={14} />
+            <span>Novo E-mail / Upload Documento</span>
+          </button>
+
           <div className="relative">
             <Search className="absolute left-3 top-2.5 text-text-tertiary w-4 h-4" />
             <input
@@ -1019,34 +1067,27 @@ export const EmailInbox: React.FC = () => {
                                         isActive: true
                                       });
 
-                                      // Update in store
-                                      useFlowStore.setState((state) => {
-                                        const updatedEmails = state.emails.map((e) => {
-                                          if (e.id !== selectedEmail.id) return e;
-                                          const product = state.catalog.find(p => p.code === selectedSkuCode);
-                                          if (!product) return e;
-
-                                          const newItems = e.items.map((item, itemIdx) => {
-                                            if (itemIdx !== idx) return item;
-                                            return {
-                                              catalogCode: product.code,
-                                              catalogName: product.name,
-                                              quantity: item.quantity,
-                                              unitPrice: product.price,
-                                              totalPrice: product.price * item.quantity,
-                                              unit: product.unit
-                                            };
-                                          });
-
-                                          const hasPending = newItems.some(it => it.catalogCode === 'PENDENTE');
-                                          const status = hasPending ? e.status : 'Aguardando';
-                                          const errorMessage = hasPending ? e.errorMessage : undefined;
-
-                                          return { ...e, items: newItems, status, errorMessage };
+                                      // Update in store & database
+                                      const product = catalog.find(p => p.code === selectedSkuCode);
+                                      if (product) {
+                                        const newItems = selectedEmail.items.map((item, itemIdx) => {
+                                          if (itemIdx !== idx) return item;
+                                          return {
+                                            catalogCode: product.code,
+                                            catalogName: product.name,
+                                            quantity: item.quantity,
+                                            unitPrice: product.price,
+                                            totalPrice: product.price * item.quantity,
+                                            unit: product.unit
+                                          };
                                         });
 
-                                        return { emails: updatedEmails };
-                                      });
+                                        const hasPending = newItems.some(it => it.catalogCode === 'PENDENTE');
+                                        const status = hasPending ? selectedEmail.status : 'Aguardando';
+                                        const errorMessage = hasPending ? selectedEmail.errorMessage : undefined;
+
+                                        await updateEmailItems(selectedEmail.id, newItems, status, errorMessage);
+                                      }
 
                                       toast.success('Associação de SKU registrada. Pedido liberado!');
                                       setMappingItemIdx(null);
@@ -1172,6 +1213,209 @@ export const EmailInbox: React.FC = () => {
           </div>
         )}
       </div>
+
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="w-full max-w-[550px] glass-panel bg-white/95 rounded-2xl border border-border shadow-2xl p-6 flex flex-col space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3 border-border/40">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-lilas/10 flex items-center justify-center text-lilas">
+                  <Upload size={16} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-text-primary">Novo E-mail / Documento Recebido</h3>
+                  <p className="text-[10px] text-text-tertiary">Simule a chegada de um novo e-mail para processamento automático da IA no Supabase</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsImportModalOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-black/5 text-text-secondary hover:text-text-primary transition cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs text-left">
+              {/* Form Grid */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="font-bold text-text-secondary">Nome do Remetente</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: Magazine Luiza S/A" 
+                    value={importSenderName}
+                    onChange={(e) => setImportSenderName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-white focus:outline-none focus:border-lilas font-medium"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-text-secondary">E-mail do Remetente</label>
+                  <input 
+                    type="email" 
+                    placeholder="Ex: compras@magalu.com.br" 
+                    value={importSenderEmail}
+                    onChange={(e) => setImportSenderEmail(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-white focus:outline-none focus:border-lilas font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="font-bold text-text-secondary">Assunto do E-mail</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: Novo Pedido de Reposição #4412" 
+                    value={importSubject}
+                    onChange={(e) => setImportSubject(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-white focus:outline-none focus:border-lilas font-medium"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-text-secondary">CNPJ Faturamento (Opcional)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: 47960950000121 (somente números)" 
+                    value={importCnpj}
+                    onChange={(e) => setImportCnpj(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-white focus:outline-none focus:border-lilas font-mono font-medium"
+                  />
+                </div>
+              </div>
+
+              {/* Suggestions */}
+              <div className="space-y-1">
+                <span className="font-bold text-text-secondary text-[11px] block">Modelos rápidos de teste:</span>
+                <div className="flex gap-2 flex-wrap">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setImportSenderName('Magazine Luiza S/A');
+                      setImportSenderEmail('compras@magalu.com.br');
+                      setImportSubject('NOVO PEDIDO #4412 - MAGALU');
+                      setImportCnpj('47960950000121');
+                      setImportBody(`Prezados,\n\nSegue pedido de reposição de itens de escritório:\n- 15x Resma de Papel A4 Chamex 75g 500 Folhas\n- 30x Caneta BIC azul\n\nAbraços,\nMarcos Souza`);
+                    }}
+                    className="px-2 py-1 rounded bg-black/5 hover:bg-black/10 text-[10px] font-bold text-text-secondary cursor-pointer"
+                  >
+                    Magalu (OK)
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setImportSenderName('Construtora Tenda S.A.');
+                      setImportSenderEmail('suprimentos@tenda.com.br');
+                      setImportSubject('SOLICITAÇÃO DE MATERIAIS PARA OBRA #990');
+                      setImportCnpj('12345678000199'); // Not mapped client
+                      setImportBody(`Olá, favor faturar os itens a seguir para a Construtora Tenda.\n- 50 un de Caderno Tilibra 10mat\n\nAtt,\nEngenharia Tenda`);
+                    }}
+                    className="px-2 py-1 rounded bg-black/5 hover:bg-black/10 text-[10px] font-bold text-text-secondary cursor-pointer"
+                  >
+                    Sem Cadastro (Review)
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setImportSenderName('Sandra Pires');
+                      setImportSenderEmail('suprimentos@carrefour.com');
+                      setImportSubject('Ordem de Compra OC-9988 - Carrefour');
+                      setImportCnpj('45543915000181');
+                      setImportBody(`Bom dia,\n\nSolicitamos os seguintes produtos:\n- 10 un de Item Totalmente Novo Sem SKU`);
+                    }}
+                    className="px-2 py-1 rounded bg-black/5 hover:bg-black/10 text-[10px] font-bold text-text-secondary cursor-pointer"
+                  >
+                    Item Sem SKU (Review)
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-text-secondary">Corpo do E-mail (Lista de produtos / Texto livre)</label>
+                <textarea 
+                  rows={4}
+                  placeholder={`Prezados,\nSolicitamos faturamento de:\n- 10 un de Resma de Papel A4 Chamex\n- 5 un de Grampeador de Mesa\n\nAtt, Compras`} 
+                  value={importBody}
+                  onChange={(e) => setImportBody(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-white focus:outline-none focus:border-lilas font-medium min-h-[100px]"
+                />
+              </div>
+
+              {/* Attachment selector */}
+              <div className="space-y-1">
+                <label className="font-bold text-text-secondary">Anexo do E-mail (PDF, Excel, HTML, CSV)</label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-border/80 hover:border-lilas hover:bg-lilas/5 cursor-pointer text-text-secondary font-bold font-mono transition text-[11px] flex-1 justify-center">
+                    <Upload size={14} className="text-lilas" />
+                    <span>{importAttachmentName ? importAttachmentName : 'Selecionar Documento...'}</span>
+                    <input 
+                      type="file" 
+                      accept=".pdf,.xlsx,.xls,.html,.htm,.csv,.txt"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </label>
+                  {importAttachmentName && (
+                    <button 
+                      type="button"
+                      onClick={() => setImportAttachmentName('')}
+                      className="px-2.5 py-2 rounded-xl bg-black/5 hover:bg-black/10 text-[11px] font-bold text-error cursor-pointer"
+                    >
+                      Remover
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t pt-4 border-border/40">
+              <button 
+                onClick={() => setIsImportModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-black/5 hover:bg-black/10 text-xs font-bold text-text-secondary cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={async () => {
+                  if (!importSenderName.trim() || !importSenderEmail.trim() || !importBody.trim()) {
+                    toast.error('Preencha pelo menos o Remetente, E-mail e o Corpo do e-mail!');
+                    return;
+                  }
+
+                  setIsParsingDoc(true);
+                  // Artificial AI delay
+                  await new Promise(resolve => setTimeout(resolve, 1500));
+                  
+                  await receiveEmailWithDocument({
+                    senderName: importSenderName,
+                    senderEmail: importSenderEmail,
+                    subject: importSubject || 'Nova Ordem de Compra Recebida',
+                    rawBody: importBody,
+                    cnpj: importCnpj || undefined,
+                    attachmentName: importAttachmentName || undefined
+                  });
+
+                  setIsParsingDoc(false);
+                  setIsImportModalOpen(false);
+                }}
+                disabled={isParsingDoc}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-lilas to-azul text-white font-bold text-xs hover:opacity-95 shadow-sm transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+              >
+                {isParsingDoc ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>IA Processando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={14} />
+                    <span>Processar com IA no Supabase</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

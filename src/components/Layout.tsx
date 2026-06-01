@@ -3,11 +3,12 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import BackgroundOrbs from './BackgroundOrbs';
 import { useFlowStore } from '../store/useFlowStore';
-import { MailCheck, CheckCircle2, Play, Sparkles, RefreshCw, Layers } from 'lucide-react';
+import { MailCheck, CheckCircle2, Play, Sparkles, RefreshCw, Layers, ChevronDown, Wrench } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const Layout: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showDemoTools, setShowDemoTools] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -173,194 +174,215 @@ export const Layout: React.FC = () => {
             {/* AI Control buttons */}
             {currentUser?.role === 'Admin' && (
               <div className="flex items-center gap-2">
-              <button
-                onClick={handleForceSync}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-lilas bg-white/60 hover:bg-white text-text-secondary hover:text-text-primary text-[12px] font-medium transition"
-                title="Reprocessar De-Para"
-              >
-                <RefreshCw size={14} className="animate-spin-slow" />
-                <span className="hidden sm:inline">Re-sync IA</span>
-              </button>
+                <button
+                  onClick={handleForceSync}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-lilas bg-white/60 hover:bg-white text-text-secondary hover:text-text-primary text-[12px] font-medium transition cursor-pointer"
+                  title="Reprocessar De-Para"
+                >
+                  <RefreshCw size={14} className="animate-spin-slow" />
+                  <span className="hidden sm:inline">Re-sync IA</span>
+                </button>
 
-              <button
-                onClick={handleSimulateSingle}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white/80 hover:bg-white border border-border hover:border-azul text-text-secondary hover:text-text-primary text-[12px] font-medium shadow-sm transition"
-              >
-                <Play size={14} className="text-azul fill-azul/20" />
-                <span>+1 E-mail (Pedido)</span>
-              </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowDemoTools(!showDemoTools)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-lilas bg-white/60 hover:bg-white text-text-secondary hover:text-text-primary text-[12px] font-medium transition shadow-sm cursor-pointer"
+                    title="Simular cenários de e-mail e pedido"
+                  >
+                    <Wrench size={14} className="text-lilas" />
+                    <span>Cenários de Teste</span>
+                    <ChevronDown size={12} className={`transition-transform duration-200 ${showDemoTools ? 'rotate-180' : ''}`} />
+                  </button>
 
-              <button
-                onClick={() => {
-                  receiveSimulatedEmail({
-                    senderName: 'Diretoria de Compras',
-                    senderEmail: 'compras@empresa-nova.com',
-                    subject: 'PEDIDO DE COMPRA DE TESTE - SEM CADASTRO',
-                    status: 'Revisão Manual',
-                    errorMessage: 'Erro de Pré-cadastro: O CNPJ do cliente (99.888.777/0001-99) ou e-mail de origem (compras@empresa-nova.com) não está pré-cadastrado no ERP. Vincule ou crie o pré-cadastro.',
-                    extractedFields: {
-                      codigo_pedido: 'PED-TESTE-999',
-                      cliente_cnpj: '99888777000199',
-                      cliente_razao: 'Empresa Nova Teste Ltda',
-                      data_emissao: new Date().toLocaleDateString('pt-BR'),
-                      condicao_pagamento: 'Boleto 30 dias',
-                      valor_total: '450.00'
-                    },
-                    mappedFields: {
-                      codigo_pedido: 'PED-TESTE-999',
-                      cliente_cnpj: '99888777000199',
-                      cliente_razao: 'Empresa Nova Teste Ltda',
-                      data_emissao: new Date().toLocaleDateString('pt-BR'),
-                      condicao_pagamento: 'Boleto 30 dias',
-                      valor_total: '450.00'
-                    }
-                  });
-                  toast.warning('Simulado e-mail de cliente sem De-Para cadastrado!', {
-                    description: 'Verifique a aba de Revisão Manual na Inbox.'
-                  });
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white/80 hover:bg-white border border-border hover:border-warning text-text-secondary hover:text-text-primary text-[12px] font-medium shadow-sm transition"
-                title="Simular e-mail com CNPJ desconhecido"
-              >
-                <Play size={14} className="text-warning fill-warning/20" />
-                <span>+1 E-mail (Sem Cadastro)</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  // Simulate an email with registered customer but unrecognized product items
-                  receiveSimulatedEmail({
-                    senderName: 'Marcos Souza',
-                    senderEmail: 'compras@magalu.com.br',
-                    subject: 'PEDIDO ADICIONAL #4420 - ITENS NOVOS',
-                    status: 'Revisão Manual',
-                    errorMessage: 'Há itens de pedido sem mapeamento correspondente no catálogo.',
-                    extractedFields: {
-                      codigo_pedido: 'PED-4420',
-                      cliente_cnpj: '47960950000121',
-                      cliente_razao: 'Magazine Luiza S/A',
-                      data_emissao: new Date().toLocaleDateString('pt-BR'),
-                      condicao_pagamento: 'Boleto 30 dias',
-                      valor_total: '770.00'
-                    },
-                    mappedFields: {
-                      codigo_pedido: 'PED-4420',
-                      cliente_cnpj: '47960950000121',
-                      cliente_razao: 'Magazine Luiza S/A',
-                      data_emissao: new Date().toLocaleDateString('pt-BR'),
-                      condicao_pagamento: 'Boleto 30 dias',
-                      valor_total: '770.00'
-                    },
-                    rawItems: [
-                      { rawDescription: 'Resma Chamex 90g Premium', quantity: 20, unitPrice: 35.50 },
-                      { rawDescription: 'Item Inexistente Totalmente', quantity: 5, unitPrice: 12.00 }
-                    ],
-                    items: [
-                      {
-                        catalogCode: 'PENDENTE',
-                        catalogName: 'Aguardando mapeamento: "Resma Chamex 90g Premium"',
-                        quantity: 20,
-                        unitPrice: 35.50,
-                        totalPrice: 710.00,
-                        unit: 'UN'
-                      },
-                      {
-                        catalogCode: 'PENDENTE',
-                        catalogName: 'Aguardando mapeamento: "Item Inexistente Totalmente"',
-                        quantity: 5,
-                        unitPrice: 12.00,
-                        totalPrice: 60.00,
-                        unit: 'UN'
-                      }
-                    ],
-                    confidenceScore: 72
-                  });
-                  toast.warning('Simulado e-mail com produtos sem De-Para cadastrado!', {
-                    description: 'Verifique a aba de Revisão Manual na Inbox.'
-                  });
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white/80 hover:bg-white border border-border hover:border-lilas text-text-secondary hover:text-text-primary text-[12px] font-medium shadow-sm transition"
-                title="Simular e-mail com produtos sem mapeamento"
-              >
-                <Play size={14} className="text-lilas fill-lilas/20" />
-                <span>+1 Prod Sem De-Para</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  receiveSimulatedEmail({
-                    status: 'E-mail Geral'
-                  });
-                  toast.info('Simulado e-mail de assunto geral na Inbox!', {
-                    description: 'IA não consumida para este e-mail.'
-                  });
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white/80 hover:bg-white border border-border hover:border-text-secondary text-text-secondary hover:text-text-primary text-[12px] font-medium shadow-sm transition"
-                title="Simular e-mail geral (sem pedido)"
-              >
-                <Play size={14} className="text-text-secondary fill-text-secondary/20" />
-                <span>+1 E-mail Geral</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  receiveSimulatedEmail({
-                    senderName: 'Remetente Ilegível',
-                    senderEmail: 'contato@remetentedesconhecido.com',
-                    subject: 'SOLICITAÇÃO DE ORDEM - ARQUIVO CORROMPIDO',
-                    status: 'Revisão Manual',
-                    errorMessage: 'Falha Crítica de Leitura: A inteligência artificial não conseguiu extrair os campos do e-mail. Todos os campos obrigatórios estão vazios.',
-                    extractedFields: {
-                      codigo_pedido: '',
-                      cliente_cnpj: '',
-                      cliente_razao: '',
-                      data_emissao: '',
-                      condicao_pagamento: '',
-                      valor_total: '0.00'
-                    },
-                    mappedFields: {
-                      codigo_pedido: '',
-                      cliente_cnpj: '',
-                      cliente_razao: '',
-                      data_emissao: '',
-                      condicao_pagamento: '',
-                      valor_total: '0.00'
-                    },
-                    rawItems: [
-                      { rawDescription: 'Item Ilegível no Chat', quantity: 1, unitPrice: 0.00 }
-                    ],
-                    items: [
-                      {
-                        catalogCode: 'PENDENTE',
-                        catalogName: 'Aguardando mapeamento manual de item ilegível',
-                        quantity: 1,
-                        unitPrice: 0.00,
-                        totalPrice: 0.00,
-                        unit: 'UN'
-                      }
-                    ],
-                    confidenceScore: 0,
-                    attachmentName: 'pedido_corrompido.pdf'
-                  });
-                  toast.error('Simulado e-mail com falha crítica de leitura!', {
-                    description: 'Verifique a aba de Revisão Manual na Inbox.'
-                  });
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white/80 hover:bg-white border border-border hover:border-error text-text-secondary hover:text-text-primary text-[12px] font-medium shadow-sm transition"
-                title="Simular e-mail com erro crítico de leitura"
-              >
-                <Play size={14} className="text-error fill-error/20" />
-                <span>+1 Falha Leitura</span>
-              </button>
-
-              <button
-                onClick={handleSimulateBatch}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-lilas to-azul hover:from-lilas/90 hover:to-azul/90 text-white text-[12px] font-semibold shadow-sm transition"
-              >
-                <Layers size={14} />
-                <span>+100 E-mails Lote</span>
-              </button>
-            </div>
+                  {showDemoTools && (
+                    <div className="absolute right-0 top-full mt-2 w-56 glass-panel bg-white/95 rounded-xl border border-border shadow-lg p-2 space-y-1 z-50 text-left animate-fadeIn">
+                      <div className="px-2 py-1.5 text-[9px] font-bold text-text-tertiary uppercase tracking-wider border-b border-border/30 mb-1">
+                        Gerar E-mails de Teste
+                      </div>
+                      <button
+                        onClick={() => {
+                          handleSimulateSingle();
+                          setShowDemoTools(false);
+                        }}
+                        className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-black/5 text-[11px] font-bold text-text-secondary hover:text-text-primary flex items-center gap-2 cursor-pointer transition"
+                      >
+                        <Play size={12} className="text-azul fill-azul/10" />
+                        <span>Pedido de Compra Comum</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          receiveSimulatedEmail({
+                            senderName: 'Diretoria de Compras',
+                            senderEmail: 'compras@empresa-nova.com',
+                            subject: 'PEDIDO DE COMPRA DE TESTE - SEM CADASTRO',
+                            status: 'Revisão Manual',
+                            errorMessage: 'Erro de Pré-cadastro: O CNPJ do cliente (99.888.777/0001-99) ou e-mail de origem (compras@empresa-nova.com) não está pré-cadastrado no ERP. Vincule ou crie o pré-cadastro.',
+                            extractedFields: {
+                              codigo_pedido: 'PED-TESTE-999',
+                              cliente_cnpj: '99888777000199',
+                              cliente_razao: 'Empresa Nova Teste Ltda',
+                              data_emissao: new Date().toLocaleDateString('pt-BR'),
+                              condicao_pagamento: 'Boleto 30 dias',
+                              valor_total: '450.00'
+                            },
+                            mappedFields: {
+                              codigo_pedido: 'PED-TESTE-999',
+                              cliente_cnpj: '99888777000199',
+                              cliente_razao: 'Empresa Nova Teste Ltda',
+                              data_emissao: new Date().toLocaleDateString('pt-BR'),
+                              condicao_pagamento: 'Boleto 30 dias',
+                              valor_total: '450.00'
+                            }
+                          });
+                          toast.warning('Simulado e-mail de cliente sem De-Para cadastrado!', {
+                            description: 'Verifique a aba de Revisão Manual na Inbox.'
+                          });
+                          setShowDemoTools(false);
+                        }}
+                        className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-black/5 text-[11px] font-bold text-text-secondary hover:text-text-primary flex items-center gap-2 cursor-pointer transition"
+                      >
+                        <Play size={12} className="text-warning fill-warning/10" />
+                        <span>Pedido Sem Cadastro ERP</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          receiveSimulatedEmail({
+                            senderName: 'Marcos Souza',
+                            senderEmail: 'compras@magalu.com.br',
+                            subject: 'PEDIDO ADICIONAL #4420 - ITENS NOVOS',
+                            status: 'Revisão Manual',
+                            errorMessage: 'Há itens de pedido sem mapeamento correspondente no catálogo.',
+                            extractedFields: {
+                              codigo_pedido: 'PED-4420',
+                              cliente_cnpj: '47960950000121',
+                              cliente_razao: 'Magazine Luiza S/A',
+                              data_emissao: new Date().toLocaleDateString('pt-BR'),
+                              condicao_pagamento: 'Boleto 30 dias',
+                              valor_total: '770.00'
+                            },
+                            mappedFields: {
+                              codigo_pedido: 'PED-4420',
+                              cliente_cnpj: '47960950000121',
+                              cliente_razao: 'Magazine Luiza S/A',
+                              data_emissao: new Date().toLocaleDateString('pt-BR'),
+                              condicao_pagamento: 'Boleto 30 dias',
+                              valor_total: '770.00'
+                            },
+                            rawItems: [
+                              { rawDescription: 'Resma Chamex 90g Premium', quantity: 20, unitPrice: 35.50 },
+                              { rawDescription: 'Item Inexistente Totalmente', quantity: 5, unitPrice: 12.00 }
+                            ],
+                            items: [
+                              {
+                                catalogCode: 'PENDENTE',
+                                catalogName: 'Aguardando mapeamento: "Resma Chamex 90g Premium"',
+                                quantity: 20,
+                                unitPrice: 35.50,
+                                totalPrice: 710.00,
+                                unit: 'UN'
+                              },
+                              {
+                                catalogCode: 'PENDENTE',
+                                catalogName: 'Aguardando mapeamento: "Item Inexistente Totalmente"',
+                                quantity: 5,
+                                unitPrice: 12.00,
+                                totalPrice: 60.00,
+                                unit: 'UN'
+                              }
+                            ],
+                            confidenceScore: 72
+                          });
+                          toast.warning('Simulado e-mail com produtos sem De-Para cadastrado!', {
+                            description: 'Verifique a aba de Revisão Manual na Inbox.'
+                          });
+                          setShowDemoTools(false);
+                        }}
+                        className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-black/5 text-[11px] font-bold text-text-secondary hover:text-text-primary flex items-center gap-2 cursor-pointer transition"
+                      >
+                        <Play size={12} className="text-lilas fill-lilas/10" />
+                        <span>Produtos Sem De-Para</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          receiveSimulatedEmail({
+                            status: 'E-mail Geral'
+                          });
+                          toast.info('Simulado e-mail de assunto geral na Inbox!', {
+                            description: 'IA não consumida para este e-mail.'
+                          });
+                          setShowDemoTools(false);
+                        }}
+                        className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-black/5 text-[11px] font-bold text-text-secondary hover:text-text-primary flex items-center gap-2 cursor-pointer transition"
+                      >
+                        <Play size={12} className="text-text-secondary fill-text-secondary/10" />
+                        <span>E-mail Informativo Geral</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          receiveSimulatedEmail({
+                            senderName: 'Remetente Ilegível',
+                            senderEmail: 'contato@remetentedesconhecido.com',
+                            subject: 'SOLICITAÇÃO DE ORDEM - ARQUIVO CORROMPIDO',
+                            status: 'Revisão Manual',
+                            errorMessage: 'Falha Crítica de Leitura: A inteligência artificial não conseguiu extrair os campos do e-mail. Todos os campos obrigatórios estão vazios.',
+                            extractedFields: {
+                              codigo_pedido: '',
+                              cliente_cnpj: '',
+                              cliente_razao: '',
+                              data_emissao: '',
+                              condicao_pagamento: '',
+                              valor_total: '0.00'
+                            },
+                            mappedFields: {
+                              codigo_pedido: '',
+                              cliente_cnpj: '',
+                              cliente_razao: '',
+                              data_emissao: '',
+                              condicao_pagamento: '',
+                              valor_total: '0.00'
+                            },
+                            rawItems: [
+                              { rawDescription: 'Item Ilegível no Chat', quantity: 1, unitPrice: 0.00 }
+                            ],
+                            items: [
+                              {
+                                catalogCode: 'PENDENTE',
+                                catalogName: 'Aguardando mapeamento manual de item ilegível',
+                                quantity: 1,
+                                unitPrice: 0.00,
+                                totalPrice: 0.00,
+                                unit: 'UN'
+                              }
+                            ],
+                            confidenceScore: 0,
+                            attachmentName: 'pedido_corrompido.pdf'
+                          });
+                          toast.error('Simulado e-mail com falha crítica de leitura!', {
+                            description: 'Verifique a aba de Revisão Manual na Inbox.'
+                          });
+                          setShowDemoTools(false);
+                        }}
+                        className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-black/5 text-[11px] font-bold text-text-secondary hover:text-text-primary flex items-center gap-2 cursor-pointer transition"
+                      >
+                        <Play size={12} className="text-error fill-error/10 animate-pulse" />
+                        <span>Falha de Leitura (OCR)</span>
+                      </button>
+                      <div className="border-t border-border/30 my-1 pt-1">
+                        <button
+                          onClick={() => {
+                            handleSimulateBatch();
+                            setShowDemoTools(false);
+                          }}
+                          className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-black/5 text-[11px] font-bold text-text-secondary hover:text-text-primary flex items-center gap-2 cursor-pointer transition"
+                        >
+                          <Layers size={12} className="text-lilas" />
+                          <span>+100 E-mails em Lote</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         </header>
