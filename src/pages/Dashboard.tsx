@@ -417,9 +417,9 @@ export const Dashboard: React.FC = () => {
         color = 'text-warning bg-warning/10';
         title = `Pedido de ${email.senderName} retido para revisão manual`;
       } else {
-        icon = MessageSquare;
+        icon = Mail;
         color = 'text-azul bg-azul/10';
-        title = `Novo chat do WhatsApp recebido de ${email.senderName}`;
+        title = `Novo e-mail de pedido recebido de ${email.senderName}`;
       }
 
       return {
@@ -436,7 +436,7 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="space-y-6">
       
-      {/* WhatsApp Connection Status Alert/Banner */}
+      {/* IMAP Connection Status Alert/Banner */}
       <div className={`p-4 rounded-2xl flex items-center justify-between border transition-all ${
         emailConnection.connected 
           ? 'bg-success/5 border-success/20 text-success' 
@@ -444,32 +444,32 @@ export const Dashboard: React.FC = () => {
       }`}>
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-xl shrink-0 ${emailConnection.connected ? 'bg-success/15 text-success' : 'bg-error/15 text-error'}`}>
-            {emailConnection.connected ? <Phone size={18} /> : <AlertCircle size={18} />}
+            {emailConnection.connected ? <Mail size={18} /> : <AlertCircle size={18} />}
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-[12px] font-bold text-text-primary">
               {emailConnection.connected 
-                ? 'Conexão com WhatsApp Ativa' 
-                : 'Atenção: Instância do WhatsApp Desconectada!'}
+                ? 'Conexão IMAP Ativa & Monitorando' 
+                : 'Atenção: Servidor de E-mail Desconectado!'}
             </span>
             <span className="text-[10px] text-text-tertiary">
               {emailConnection.connected 
-                ? `Conectado com sucesso via WhatsApp API. QR Code sincronizado: ${emailConnection.lastSyncTime || 'Agora mesmo'}` 
-                : 'Não estamos recebendo novos pedidos via WhatsApp. Reconecte a instância nas Configurações.'}
+                ? `Monitoramento ativo no servidor IMAP. Última sincronização: ${emailConnection.lastSyncTime || 'Agora mesmo'}` 
+                : 'Não estamos monitorando novos pedidos via e-mail. Configure e reconecte nas Configurações.'}
             </span>
           </div>
         </div>
         
         {emailConnection.connected ? (
           <span className="text-[9px] bg-success/15 text-success px-2.5 py-1 rounded-full font-bold uppercase tracking-wider shrink-0">
-            Online
+            Monitorando
           </span>
         ) : (
           <Link 
             to="/configuracoes" 
             className="text-[10px] bg-error text-white px-3 py-1.5 rounded-xl font-bold hover:bg-error/90 transition shadow-sm whitespace-nowrap shrink-0"
           >
-            Reconectar WhatsApp
+            Configurar Conexão
           </Link>
         )}
       </div>
@@ -738,7 +738,7 @@ export const Dashboard: React.FC = () => {
             <p className="text-xl font-bold text-text-primary">
               R$ {(settings.savedAiCost || 112.50).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </p>
-            <p className="text-[10px] text-text-tertiary">{(settings.filteredEmailsCount || 2250).toLocaleString('pt-BR')} chats filtrados</p>
+            <p className="text-[10px] text-text-tertiary">{(settings.filteredEmailsCount || 2250).toLocaleString('pt-BR')} e-mails isentos</p>
           </div>
           <div className="p-3 rounded-xl bg-rosa/10 text-rosa shrink-0">
             <Filter size={20} />
@@ -834,7 +834,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <p className="text-[11px] text-text-tertiary text-center leading-relaxed max-w-[220px]">
-            Índice de acurácia em extrações cognitivas de conversas e dados no período selecionado.
+            Índice de acurácia em extrações cognitivas de e-mails e dados no período selecionado.
           </p>
         </div>
       </div>

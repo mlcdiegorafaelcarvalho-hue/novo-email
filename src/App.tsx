@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
-import WhatsAppInbox from './pages/WhatsAppInbox';
+import EmailInbox from './pages/EmailInbox';
 import ErpLayoutBuilder from './pages/ErpLayoutBuilder';
 import DePara from './pages/DePara';
 import ProductCatalog from './pages/ProductCatalog';
@@ -54,7 +54,7 @@ function App() {
         <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/inbox" element={<WhatsAppInbox />} />
+          <Route path="/inbox" element={<EmailInbox />} />
           <Route path="/erp-layout" element={<ErpLayoutBuilder />} />
           <Route path="/depara" element={<DePara />} />
           <Route path="/catalogo" element={<ProductCatalog />} />

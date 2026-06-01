@@ -37,7 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => 
 
   const menuItems = [
     { path: '/dashboard', label: 'Painel Geral', icon: LayoutDashboard },
-    { path: '/inbox', label: 'WhatsApp Inbox', icon: MessageSquare, badge: 'emails' },
+    { path: '/inbox', label: 'E-mail Inbox', icon: Inbox, badge: 'emails' },
     { path: '/erp-layout', label: 'Layout do ERP', icon: Sliders },
     { path: '/depara', label: 'Dicionário De-Para', icon: ArrowLeftRight },
     { path: '/catalogo', label: 'Catálogo de Produtos', icon: Database },

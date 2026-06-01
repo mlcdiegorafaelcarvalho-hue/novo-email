@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { NavLink } from 'react-router-dom';
 import { useFlowStore } from '../store/useFlowStore';
 import { EmailStatus, EmailOrderData, ChatMessage, OrderItemMapped } from '../types';
 import { 
@@ -14,20 +15,20 @@ import {
   ExternalLink,
   Edit2,
   Archive,
-  MessageSquare,
+  Inbox,
   FileText,
+  FileSpreadsheet,
+  FileCode,
+  File,
   Sliders,
   Cpu,
-  Layers,
-  Sparkles,
-  Phone,
   Link2,
-  Trash2,
+  Sparkles,
   ArrowLeftRight
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-export const WhatsAppInbox: React.FC = () => {
+export const EmailInbox: React.FC = () => {
   const emailsRaw = useFlowStore((state) => state.emails);
   const currentUser = useFlowStore((state) => state.currentUser);
   const companies = useFlowStore((state) => state.companies);
@@ -60,7 +61,7 @@ export const WhatsAppInbox: React.FC = () => {
   const [rightPanelTab, setRightPanelTab] = useState<'extracted' | 'products' | 'logs'>('extracted');
   const [isSending, setIsSending] = useState(false);
 
-  // Takeover text input
+  // Email response input
   const [takeoverText, setTakeoverText] = useState('');
   const [isSendingMsg, setIsSendingMsg] = useState(false);
 
@@ -77,17 +78,6 @@ export const WhatsAppInbox: React.FC = () => {
   const [selectedSkuCode, setSelectedSkuCode] = useState('');
 
   const chatEndRef = useRef<HTMLDivElement>(null);
-
-  // Deterministic Phone Number generator based on contact identifier
-  const getPhoneNumber = (email: string) => {
-    let hash = 0;
-    for (let i = 0; i < email.length; i++) {
-      hash = email.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const number = Math.abs(hash).toString().substring(0, 9).padStart(9, '0');
-    const ddd = ['11', '21', '31', '41', '51', '61', '71', '81', '85'][Math.abs(hash) % 9];
-    return `+55 (${ddd}) 9${number.substring(1, 5)}-${number.substring(5)}`;
-  };
 
   const filteredEmailCustomers = useMemo(() => {
     const query = customerEmailSearch.toLowerCase();
@@ -117,8 +107,7 @@ export const WhatsAppInbox: React.FC = () => {
       const matchesSearch = 
         email.senderName.toLowerCase().includes(search.toLowerCase()) ||
         email.senderEmail.toLowerCase().includes(search.toLowerCase()) ||
-        email.subject.toLowerCase().includes(search.toLowerCase()) ||
-        getPhoneNumber(email.senderEmail).includes(search);
+        email.subject.toLowerCase().includes(search.toLowerCase());
       
       const matchesStatus = statusFilter === 'Todos' 
         ? email.status !== 'Arquivado' 
@@ -152,7 +141,7 @@ export const WhatsAppInbox: React.FC = () => {
     return { todayEmails: today, olderEmails: older };
   }, [filteredEmails]);
 
-  // Scroll to bottom of chat when messages change
+  // Scroll to bottom of interactions when message thread updates
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [selectedEmail?.chatMessages, selectedEmailId]);
@@ -226,7 +215,7 @@ export const WhatsAppInbox: React.FC = () => {
     setIsEditing(false);
     toast.success('Campos corrigidos salvos com sucesso!', {
       description: newStatus === 'Aguardando' 
-        ? 'O pedido foi revalidado com sucesso e está pronto para o ERP!' 
+        ? 'O e-mail foi revalidado com sucesso e está pronto para o ERP!' 
         : 'Alterações gravadas. Pedido ainda possui pendências.'
     });
   };
@@ -247,7 +236,7 @@ export const WhatsAppInbox: React.FC = () => {
     }
   };
 
-  const handleSendChatMessage = async () => {
+  const handleSendEmailReply = async () => {
     if (!selectedEmail || !takeoverText.trim()) return;
     setIsSendingMsg(true);
     await useFlowStore.getState().sendEmailReply(selectedEmail.id, takeoverText);
@@ -266,7 +255,7 @@ export const WhatsAppInbox: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `whatsapp-chat-${email.id}.${type}`);
+    link.setAttribute('download', `email-pedido-${email.id}.${type}`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -306,17 +295,31 @@ export const WhatsAppInbox: React.FC = () => {
       case 'Revisão Manual': return 'bg-warning/10 text-warning border-warning/25';
       case 'E-mail Geral': return 'bg-text-tertiary/10 text-text-secondary border-border/25';
       case 'Arquivado': return 'bg-black/5 text-text-tertiary border-border/25';
+      default: return 'bg-black/5 text-text-tertiary border-border/25';
     }
   };
 
-  const isCustomerMissing = selectedEmail?.errorMessage?.includes('Pré-cadastro') || selectedEmail?.errorMessage?.includes('Cadastro');
-  const hasPendingItems = selectedEmail?.items.some((it) => it.catalogCode === 'PENDENTE') || false;
+  const isCustomerMissing = useMemo(() => {
+    if (!selectedEmail) return false;
+    const cnpj = selectedEmail.extractedFields.cliente_cnpj || selectedEmail.extractedFields.C7_CLIENTE || selectedEmail.extractedFields.cnpj_cliente || selectedEmail.extractedFields.cgcCli || '';
+    const hasClientMapping = deParaClientes.some(c => 
+      (c.incomingCnpj && c.incomingCnpj === cnpj) ||
+      (c.incomingEmail && c.incomingEmail === selectedEmail.senderEmail)
+    );
+    const isCustomerRegistered = erpCustomers.some(c => c.cnpj === cnpj);
+    return !hasClientMapping && !isCustomerRegistered;
+  }, [selectedEmail, deParaClientes, erpCustomers]);
+
+  const hasPendingItems = useMemo(() => {
+    if (!selectedEmail) return false;
+    return selectedEmail.items.some((it) => it.catalogCode === 'PENDENTE');
+  }, [selectedEmail]);
 
   return (
-    <div className="h-[calc(100vh-8.5rem)] flex gap-6 animate-fadeIn">
+    <div className="h-[calc(100vh-8.5rem)] flex gap-6 animate-fadeIn text-text-primary">
       
-      {/* Left panel: Conversation List */}
-      <div className="w-[340px] lg:w-[380px] glass-panel rounded-2xl flex flex-col overflow-hidden shrink-0 border border-border/40">
+      {/* Left panel: E-mail Ingestion List */}
+      <div className="w-[340px] lg:w-[380px] glass-panel rounded-2xl flex flex-col overflow-hidden shrink-0 border border-border/40 bg-white/60">
         
         {/* Search Header */}
         <div className="p-4 border-b border-border/30 bg-white/30 space-y-3">
@@ -324,14 +327,14 @@ export const WhatsAppInbox: React.FC = () => {
             <Search className="absolute left-3 top-2.5 text-text-tertiary w-4 h-4" />
             <input
               type="text"
-              placeholder="Buscar por contato ou telefone..."
-              className="w-full pl-9 pr-4 py-2 rounded-xl border border-border/60 bg-white/60 focus:outline-none focus:border-lilas text-xs font-semibold"
+              placeholder="Buscar por remetente, e-mail ou assunto..."
+              className="w-full pl-9 pr-4 py-2 rounded-xl border border-border/60 bg-white/60 focus:outline-none focus:border-lilas text-xs font-semibold text-text-primary"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
 
-          {/* Quick filter tabs ordered exactly as requested: Aguardando, Revisão manual, Geral (E-mail geral), Todos */}
+          {/* Quick filter tabs */}
           <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
             {[
               { status: 'Aguardando' as const, label: 'Aguardando' },
@@ -354,14 +357,14 @@ export const WhatsAppInbox: React.FC = () => {
           </div>
         </div>
 
-        {/* Chats Scroll area */}
+        {/* E-mails Scroll area */}
         <div className="flex-1 overflow-y-auto divide-y divide-border/20">
           {filteredEmails.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center p-8 text-center">
               <div className="w-12 h-12 rounded-full bg-border/20 flex items-center justify-center text-text-tertiary mb-3">
-                <Search size={20} />
+                <Inbox size={20} />
               </div>
-              <p className="text-xs font-bold text-text-secondary">Nenhuma conversa encontrada</p>
+              <p className="text-xs font-bold text-text-secondary">Nenhum e-mail encontrado</p>
               <p className="text-[11px] text-text-tertiary mt-1">Refine a busca ou altere os filtros.</p>
             </div>
           ) : (
@@ -370,15 +373,12 @@ export const WhatsAppInbox: React.FC = () => {
                 <div className="flex flex-col">
                   <div className="bg-lilas/5 px-4 py-2 text-[9px] font-bold text-lilas uppercase tracking-wider sticky top-0 bg-white/90 backdrop-blur-md z-10 border-b border-border/10 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-lilas animate-pulse shrink-0" />
-                    <span>Novas Hoje ({todayEmails.length})</span>
+                    <span>Novos Hoje ({todayEmails.length})</span>
                   </div>
                   <div className="divide-y divide-border/10">
                     {todayEmails.map((email) => {
                       const isSelected = email.id === selectedEmailId;
                       const itemsTotal = email.items.reduce((acc, it) => acc + it.totalPrice, 0);
-                      const lastMsgText = email.chatMessages && email.chatMessages.length > 0 
-                        ? email.chatMessages[email.chatMessages.length - 1].text 
-                        : email.rawBody;
                       
                       return (
                         <button
@@ -406,18 +406,18 @@ export const WhatsAppInbox: React.FC = () => {
                                 {email.receivedAt.split(' ')[1]}
                               </span>
                             </div>
-                            <span className="text-[10px] text-text-secondary block font-mono font-medium truncate">
-                              {getPhoneNumber(email.senderEmail)}
+                            <span className="text-[10px] text-text-tertiary block font-mono font-medium truncate">
+                              {email.senderEmail}
                             </span>
-                            <p className="text-[11px] text-text-tertiary line-clamp-1 truncate font-medium">
-                              {lastMsgText}
+                            <p className="text-[11px] text-text-secondary truncate font-bold">
+                              {email.subject}
                             </p>
                             <div className="flex items-center justify-between mt-1.5 pt-1">
                               <span className="text-[10px] font-bold text-lilas">
                                 R$ {itemsTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </span>
                               <span className={`px-2 py-0.5 rounded-full border text-[8px] font-bold uppercase tracking-wider ${getStatusStyle(email.status)}`}>
-                                {email.status === 'E-mail Geral' ? 'Chat Geral' : email.status}
+                                {email.status === 'E-mail Geral' ? 'Geral' : email.status}
                               </span>
                             </div>
                           </div>
@@ -431,15 +431,12 @@ export const WhatsAppInbox: React.FC = () => {
               {olderEmails.length > 0 && (
                 <div className="flex flex-col">
                   <div className="bg-black/[0.02] px-4 py-2 text-[9px] font-bold text-text-secondary uppercase tracking-wider sticky top-0 bg-white/90 backdrop-blur-md z-10 border-b border-border/10">
-                    <span>Conversas Anteriores ({olderEmails.length})</span>
+                    <span>E-mails Anteriores ({olderEmails.length})</span>
                   </div>
                   <div className="divide-y divide-border/10">
                     {olderEmails.map((email) => {
                       const isSelected = email.id === selectedEmailId;
                       const itemsTotal = email.items.reduce((acc, it) => acc + it.totalPrice, 0);
-                      const lastMsgText = email.chatMessages && email.chatMessages.length > 0 
-                        ? email.chatMessages[email.chatMessages.length - 1].text 
-                        : email.rawBody;
                       
                       return (
                         <button
@@ -467,18 +464,18 @@ export const WhatsAppInbox: React.FC = () => {
                                 {email.receivedAt.split(' ')[0]}
                               </span>
                             </div>
-                            <span className="text-[10px] text-text-secondary block font-mono font-medium truncate">
-                              {getPhoneNumber(email.senderEmail)}
+                            <span className="text-[10px] text-text-tertiary block font-mono font-medium truncate">
+                              {email.senderEmail}
                             </span>
-                            <p className="text-[11px] text-text-tertiary line-clamp-1 truncate font-medium">
-                              {lastMsgText}
+                            <p className="text-[11px] text-text-secondary truncate font-bold">
+                              {email.subject}
                             </p>
                             <div className="flex items-center justify-between mt-1.5 pt-1">
                               <span className="text-[10px] font-bold text-lilas">
                                 R$ {itemsTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </span>
                               <span className={`px-2 py-0.5 rounded-full border text-[8px] font-bold uppercase tracking-wider ${getStatusStyle(email.status)}`}>
-                                {email.status === 'E-mail Geral' ? 'Chat Geral' : email.status}
+                                {email.status === 'E-mail Geral' ? 'Geral' : email.status}
                               </span>
                             </div>
                           </div>
@@ -493,27 +490,26 @@ export const WhatsAppInbox: React.FC = () => {
         </div>
       </div>
 
-      {/* Center & Right panels: Interactive timeline + Extraction Inspector */}
+      {/* Center & Right panels: Email Reader & Extractions */}
       <div className="flex-1 flex gap-5 min-w-0">
         
         {selectedEmail ? (
           <>
-            {/* Center Panel: WhatsApp Conversation timeline */}
+            {/* Center Panel: Email Content & History logs */}
             <div className="flex-1 glass-panel rounded-2xl flex flex-col overflow-hidden border border-border/40 bg-white/20">
               
-              {/* Chat Window Header */}
+              {/* Reader Header */}
               <div className="p-4 border-b border-border/30 bg-white/40 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-lilas/10 border border-lilas/25 flex items-center justify-center font-bold text-lilas text-sm shrink-0">
                     {selectedEmail.senderName.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[13px] font-bold text-text-primary flex items-center gap-1.5">
-                      {selectedEmail.senderName}
-                      <span className="w-2.5 h-2.5 rounded-full bg-success inline-block shadow-sm animate-pulse" title="Cliente Online" />
+                    <span className="text-[13px] font-bold text-text-primary">
+                      {selectedEmail.subject}
                     </span>
                     <span className="text-[11px] text-text-tertiary font-mono font-medium">
-                      {getPhoneNumber(selectedEmail.senderEmail)} • {selectedEmail.senderEmail}
+                      De: {selectedEmail.senderName} ({selectedEmail.senderEmail}) • Recebido em: {selectedEmail.receivedAt}
                     </span>
                   </div>
                 </div>
@@ -521,7 +517,7 @@ export const WhatsAppInbox: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <span className={`px-3 py-1 rounded-xl border text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 bg-white shadow-xs ${getStatusStyle(selectedEmail.status)}`}>
                     <Sparkles size={11} className="text-lilas" />
-                    <span>Robô: {selectedEmail.status === 'E-mail Geral' ? 'Inativo' : 'Ativo'}</span>
+                    <span>IA: {selectedEmail.status === 'E-mail Geral' ? 'Isenta' : 'Ativa'}</span>
                   </span>
                   <button 
                     onClick={() => setSelectedEmailId(null)}
@@ -532,86 +528,146 @@ export const WhatsAppInbox: React.FC = () => {
                 </div>
               </div>
 
-              {/* Chat Timeline (whatsapp bubble styling) */}
-              <div className="flex-1 p-5 overflow-y-auto bg-slate-50/50 space-y-4">
+              {/* Email Content Details */}
+              <div className="flex-1 p-5 overflow-y-auto bg-slate-50/50 space-y-5">
                 
-                {selectedEmail.chatMessages && selectedEmail.chatMessages.length > 0 ? (
-                  selectedEmail.chatMessages.map((msg) => {
-                    const isBuyer = msg.sender === 'buyer';
-                    const isAgent = msg.sender === 'agent';
-                    
-                    return (
-                      <div 
-                        key={msg.id} 
-                        className={`flex w-full ${isBuyer ? 'justify-start' : 'justify-end'}`}
-                      >
-                        <div 
-                          className={`max-w-[75%] p-3.5 rounded-2xl shadow-xs leading-relaxed text-xs relative ${
-                            isBuyer 
-                              ? 'bg-white text-text-primary rounded-tl-xs border border-slate-200' 
-                              : isAgent 
-                                ? 'bg-[#ECE5F9] text-text-primary rounded-tr-xs border border-[#DCD0F3]' 
-                                : 'bg-[#E3F2FD] text-text-primary rounded-tr-xs border border-[#C5CAE9]'
-                          }`}
-                        >
-                          {/* Sender Indicator */}
-                          <div className="flex items-center justify-between gap-6 mb-1 text-[9px] uppercase tracking-wider font-bold text-text-tertiary">
-                            <span>
-                              {isBuyer 
-                                ? 'Comprador' 
-                                : isAgent 
-                                  ? '🤖 Assistente IA' 
-                                  : '👨‍💼 Operador Humano'}
-                            </span>
-                            <span className="font-mono text-[8px] font-medium">{msg.timestamp}</span>
-                          </div>
-                          
-                          <p className="whitespace-pre-wrap font-sans text-[12px] font-medium text-text-primary">
-                            {msg.text}
-                          </p>
+                {/* PDF/Attachment Row if exists */}
+                {selectedEmail.attachmentName && (() => {
+                  const name = selectedEmail.attachmentName;
+                  const ext = name.split('.').pop()?.toLowerCase();
+                  
+                  let icon = <FileText size={18} />;
+                  let iconBg = 'bg-rose-50 border-rose-100 text-rose-500';
+                  let label = 'Documento PDF Extraído';
+                  
+                  if (ext === 'xlsx' || ext === 'xls') {
+                    icon = <FileSpreadsheet size={18} />;
+                    iconBg = 'bg-emerald-50 border-emerald-100 text-emerald-600';
+                    label = 'Planilha Excel Extraída';
+                  } else if (ext === 'html' || ext === 'htm') {
+                    icon = <FileCode size={18} />;
+                    iconBg = 'bg-blue-50 border-blue-100 text-blue-500';
+                    label = 'Documento HTML Extraído';
+                  } else if (ext === 'csv') {
+                    icon = <FileSpreadsheet size={18} />;
+                    iconBg = 'bg-amber-50 border-amber-100 text-amber-500';
+                    label = 'Planilha CSV Extraída';
+                  } else if (ext) {
+                    icon = <File size={18} />;
+                    iconBg = 'bg-slate-50 border-slate-100 text-slate-500';
+                    label = `Arquivo ${ext.toUpperCase()} Extraído`;
+                  }
+                  
+                  return (
+                    <div className="p-3.5 rounded-xl border border-border bg-white/80 shadow-xs flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-9 h-9 rounded-xl ${iconBg} border flex items-center justify-center shrink-0`}>
+                          {icon}
+                        </div>
+                        <div className="min-w-0 flex flex-col">
+                          <span className="text-[12px] font-bold text-text-primary truncate">{name}</span>
+                          <span className="text-[9px] text-text-tertiary uppercase font-bold">{label}</span>
                         </div>
                       </div>
-                    );
-                  })
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center p-6 text-center text-text-tertiary">
-                    <MessageSquare size={32} className="opacity-30 mb-2" />
-                    <p className="text-xs">Nenhum diálogo estruturado encontrado.</p>
+                      <a
+                        href={`/pdf-viewer/${selectedEmail.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 rounded-lg border border-border hover:bg-black/5 text-text-secondary hover:text-text-primary text-[10px] font-bold transition flex items-center gap-1 shrink-0"
+                      >
+                        <ExternalLink size={12} />
+                        Ver Documento
+                      </a>
+                    </div>
+                  );
+                })()}
+
+                {/* Raw Email Text Body */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-bold text-text-tertiary uppercase tracking-wider">Corpo do E-mail</span>
+                  <div className="bg-white/80 border border-border/30 p-5 rounded-2xl text-xs font-semibold leading-relaxed font-mono whitespace-pre-wrap text-text-primary shadow-xs">
+                    {selectedEmail.rawBody}
                   </div>
-                )}
-                <div ref={chatEndRef} />
+                </div>
+
+                {/* Timeline Interaction History */}
+                <div className="space-y-3 pt-3">
+                  <span className="text-[10px] font-bold text-text-tertiary uppercase tracking-wider block">Linha do Tempo & Logs da IA</span>
+                  
+                  {selectedEmail.chatMessages && selectedEmail.chatMessages.length > 0 ? (
+                    <div className="space-y-3">
+                      {selectedEmail.chatMessages.map((msg) => {
+                        const isBuyer = msg.sender === 'buyer';
+                        const isAgent = msg.sender === 'agent';
+                        
+                        return (
+                          <div 
+                            key={msg.id} 
+                            className={`flex w-full ${isBuyer ? 'justify-start' : 'justify-end'}`}
+                          >
+                            <div 
+                              className={`max-w-[85%] p-3.5 rounded-2xl shadow-xs leading-relaxed text-xs relative ${
+                                isBuyer 
+                                  ? 'bg-white text-text-primary rounded-tl-xs border border-slate-200' 
+                                  : 'bg-[#ECE5F9] text-text-primary rounded-tr-xs border border-[#DCD0F3]'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-6 mb-1 text-[9px] uppercase tracking-wider font-bold text-text-tertiary">
+                                <span>
+                                  {isBuyer 
+                                    ? 'Comprador' 
+                                    : isAgent 
+                                      ? '🤖 Assistente IA' 
+                                      : '👨‍💼 Resposta Operador'}
+                                </span>
+                                <span className="font-mono text-[8px] font-medium">{msg.timestamp}</span>
+                              </div>
+                              <p className="whitespace-pre-wrap font-sans text-[12px] font-medium text-text-primary">
+                                {msg.text}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-4 border border-dashed border-border/60 rounded-xl text-center text-text-tertiary text-xs">
+                      Nenhum histórico de processamento estruturado.
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
               </div>
 
-              {/* Chat Typing Footer & Action Takeover */}
+              {/* Email Reply Text Footer */}
               <div className="p-4 border-t border-border/30 bg-white/40 shrink-0 space-y-3">
-                
-                {/* Micro templates trigger */}
+                {/* Reply Quick Templates */}
                 <div className="flex flex-wrap gap-1.5 items-center">
-                  <span className="text-[10px] text-text-secondary font-bold uppercase mr-1 shrink-0">Modelos:</span>
+                  <span className="text-[10px] text-text-secondary font-bold uppercase mr-1 shrink-0">Templates:</span>
                   <button
                     type="button"
                     onClick={() => {
-                      const base = settings.replyTemplateConfirm || 'Olá {cliente}, recebemos o seu pedido de compra com sucesso! O processamento foi iniciado e as informações já foram transmitidas para o nosso ERP.';
+                      const base = settings.replyTemplateConfirm || 'Olá {cliente}, confirmamos o recebimento e processamento do seu pedido! As informações já foram devidamente integradas ao nosso ERP.';
                       setTakeoverText(base.replace('{cliente}', selectedEmail.senderName));
                     }}
                     className="px-2.5 py-1 rounded-lg bg-lilas/10 hover:bg-lilas/20 border border-lilas/25 text-[9px] font-bold text-lilas transition cursor-pointer"
                   >
-                    👍 Confirmar Pedido
+                    👍 Confirmar Recebimento
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      const base = settings.replyTemplateInconsistency || 'Olá {cliente}, identificamos que alguns produtos do seu pedido de compra não coincidem com o nosso catálogo oficial. Por favor, confirme as descrições.';
+                      const base = settings.replyTemplateInconsistency || 'Olá {cliente}, identificamos divergências em alguns itens do pedido em relação ao catálogo do ERP. Poderia revisar as descrições?';
                       setTakeoverText(base.replace('{cliente}', selectedEmail.senderName));
                     }}
                     className="px-2.5 py-1 rounded-lg bg-warning/10 hover:bg-warning/20 border border-warning/25 text-[9px] font-bold text-warning transition cursor-pointer"
                   >
-                    ⚠️ Inconsistência
+                    ⚠️ Pendência de SKU
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      const base = settings.replyTemplateNoRegistration || 'Olá {cliente}, não conseguimos localizar o cadastro corporativo da sua empresa no nosso sistema. Poderia nos enviar o CNPJ?';
+                      const base = settings.replyTemplateNoRegistration || 'Olá {cliente}, não localizamos o CNPJ da sua empresa em nosso cadastro. Por favor, responda com os dados cadastrais.';
                       setTakeoverText(base.replace('{cliente}', selectedEmail.senderName));
                     }}
                     className="px-2.5 py-1 rounded-lg bg-error/10 hover:bg-error/20 border border-error/25 text-[9px] font-bold text-error transition cursor-pointer"
@@ -620,25 +676,25 @@ export const WhatsAppInbox: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Main typing bar */}
+                {/* Email typing box */}
                 <div className="flex gap-2">
                   <textarea
                     rows={2}
-                    placeholder="Intervir manualmente (desativa robô temporariamente)..."
-                    className="flex-1 p-2.5 border border-border/60 bg-white rounded-xl focus:outline-none focus:border-lilas text-xs font-semibold placeholder:text-text-tertiary resize-none leading-relaxed"
+                    placeholder="Escrever e-mail de resposta manual ao comprador (suspende IA temporariamente)..."
+                    className="flex-1 p-2.5 border border-border/60 bg-white rounded-xl focus:outline-none focus:border-lilas text-xs font-semibold placeholder:text-text-tertiary resize-none leading-relaxed text-text-primary"
                     value={takeoverText}
                     onChange={(e) => setTakeoverText(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
-                        handleSendChatMessage();
+                        handleSendEmailReply();
                       }
                     }}
                   />
                   <button
                     type="button"
                     disabled={!takeoverText.trim() || isSendingMsg}
-                    onClick={handleSendChatMessage}
+                    onClick={handleSendEmailReply}
                     className="w-12 rounded-xl bg-gradient-to-tr from-lilas to-azul hover:opacity-90 disabled:opacity-40 text-white flex items-center justify-center shrink-0 shadow-sm transition cursor-pointer"
                   >
                     {isSendingMsg ? <RefreshCw className="animate-spin" size={16} /> : <Send size={16} />}
@@ -647,10 +703,10 @@ export const WhatsAppInbox: React.FC = () => {
               </div>
             </div>
 
-            {/* Right Panel: Data Extraction Controller & SKUs Mapping */}
+            {/* Right Panel: Data Extraction & Mapped SKUs */}
             <div className="w-[380px] lg:w-[440px] glass-panel rounded-2xl flex flex-col overflow-hidden shrink-0 border border-border/40 bg-white/40">
               
-              {/* Tabs header */}
+              {/* Right Panel Tabs */}
               <div className="flex border-b border-border/20 bg-white/20 shrink-0">
                 <button
                   type="button"
@@ -662,7 +718,7 @@ export const WhatsAppInbox: React.FC = () => {
                   }`}
                 >
                   <Cpu size={13} />
-                  Dados Extraídos
+                  Dados da Nota/Pedido
                 </button>
                 
                 <button
@@ -675,7 +731,7 @@ export const WhatsAppInbox: React.FC = () => {
                   }`}
                 >
                   <Sliders size={13} />
-                  Itens/Produtos
+                  Produtos (De-Para)
                 </button>
 
                 <button
@@ -692,7 +748,7 @@ export const WhatsAppInbox: React.FC = () => {
                 </button>
               </div>
 
-              {/* Tabs Content */}
+              {/* Tabs Content Scroll Area */}
               <div className="flex-1 p-4 overflow-y-auto space-y-4">
                 
                 {selectedEmail.errorMessage && (
@@ -706,26 +762,25 @@ export const WhatsAppInbox: React.FC = () => {
 
                 {rightPanelTab === 'extracted' && (
                   <div className="space-y-4">
-                    {/* Error Resolution section for customer mapping */}
+                    {/* Link Client Warning Card */}
                     {isCustomerMissing && (
-                      <div className="p-4 rounded-xl border border-lilas/25 bg-gradient-to-tr from-lilas/5 via-azul/5 to-transparent space-y-3">
+                      <div className="p-4 rounded-xl border border-lilas/25 bg-gradient-to-tr from-lilas/5 via-azul/5 to-transparent space-y-3 text-left">
                         <div className="flex items-center gap-1.5 text-[11px] font-bold text-text-primary">
                           <User size={13} className="text-lilas" />
                           <span>Vincular Cliente no ERP</span>
                         </div>
                         <p className="text-[10px] text-text-secondary leading-relaxed">
-                          O CNPJ extraído não está cadastrado em sua carteira no ERP. Resolva vinculando a um cliente ou cadastrando novo.
+                          O remetente ou CNPJ extraído não possui um cadastro ou vínculo ativo de carteira no ERP.
                         </p>
 
                         <div className="flex flex-col gap-3 pt-1">
-                          
-                          {/* Option A: Link by email/phone */}
+                          {/* Search matching clients input dropdown */}
                           <div className="flex flex-col gap-1 p-2 bg-white border border-border/30 rounded-lg">
-                            <span className="text-[8px] font-bold text-text-secondary uppercase">Buscar por nome ou CNPJ</span>
+                            <span className="text-[8px] font-bold text-text-secondary uppercase">Pesquisar por nome do cliente</span>
                             <div className="relative">
                               <input
                                 type="text"
-                                placeholder="Procurar cliente..."
+                                placeholder="Procurar cliente cadastrado..."
                                 className="w-full p-2 border border-border/60 bg-white rounded-lg focus:outline-none focus:border-lilas text-[10px] font-semibold text-text-primary mt-1"
                                 value={customerEmailSearch}
                                 onChange={(e) => {
@@ -767,7 +822,7 @@ export const WhatsAppInbox: React.FC = () => {
                             <div className="flex-grow border-t border-border/20"></div>
                           </div>
 
-                          {/* Option B: Create new customer */}
+                          {/* Trigger customer creation in ERP */}
                           <button
                             type="button"
                             onClick={() => {
@@ -780,15 +835,15 @@ export const WhatsAppInbox: React.FC = () => {
                             }}
                             className="w-full py-2 px-3 bg-lilas hover:bg-lilas/90 text-white text-[11px] font-bold rounded-lg shadow-sm transition cursor-pointer"
                           >
-                            Criar Pré-cadastro no ERP & Desbloquear
+                            Cadastrar Cliente no ERP
                           </button>
                         </div>
                       </div>
                     )}
 
-                    {/* Metadata Header */}
+                    {/* Extracted ERP Fields Header */}
                     <div className="flex items-center justify-between border-b border-border/20 pb-2">
-                      <span className="text-[12px] font-bold text-text-primary">Campos Extraídos pela IA</span>
+                      <span className="text-[12px] font-bold text-text-primary">Campos Estruturados pela IA</span>
                       {isEditing ? (
                         <div className="flex gap-1.5">
                           <button
@@ -813,14 +868,14 @@ export const WhatsAppInbox: React.FC = () => {
                             onClick={() => setIsEditing(true)}
                             className="px-2.5 py-1 rounded border border-border/80 text-text-secondary hover:text-text-primary text-[10px] font-bold flex items-center gap-1 bg-white cursor-pointer"
                           >
-                            <Edit2 size={11} /> Corrigir Dados
+                            <Edit2 size={11} /> Editar Campos
                           </button>
                         )
                       )}
                     </div>
 
-                    {/* Fields List */}
-                    <div className="space-y-3">
+                    {/* Editable fields mapping list */}
+                    <div className="space-y-3 text-left">
                       {erpFields.map((field) => {
                         const value = isEditing 
                           ? (editedFields[field.name] || '') 
@@ -861,7 +916,7 @@ export const WhatsAppInbox: React.FC = () => {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between border-b border-border/20 pb-2">
                       <span className="text-[12px] font-bold text-text-primary">Mapeamento de Produtos De-Para</span>
-                      <span className="text-[10px] text-text-tertiary">Vínculo de SKUs informais</span>
+                      <span className="text-[10px] text-text-tertiary">Mapeamento de SKUs de e-mail</span>
                     </div>
 
                     <div className="space-y-3">
@@ -870,10 +925,10 @@ export const WhatsAppInbox: React.FC = () => {
                         const isMatched = it.catalogCode !== 'PENDENTE';
                         
                         return (
-                          <div key={idx} className="p-3.5 rounded-xl bg-white border border-border/30 flex flex-col gap-2.5">
+                          <div key={idx} className="p-3.5 rounded-xl bg-white border border-border/30 flex flex-col gap-2.5 text-left">
                             <div className="flex justify-between items-start gap-4">
                               <div className="min-w-0">
-                                <p className="text-[9px] text-text-tertiary font-bold uppercase truncate">No Whatsapp: "{rawItem?.rawDescription || it.catalogName}"</p>
+                                <p className="text-[9px] text-text-tertiary font-bold uppercase truncate">No E-mail: "{rawItem?.rawDescription || it.catalogName}"</p>
                                 <p className="text-[12px] font-bold text-text-primary mt-0.5 truncate">{it.catalogName}</p>
                               </div>
                               <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 ${
@@ -889,7 +944,7 @@ export const WhatsAppInbox: React.FC = () => {
                               <div className="text-right text-lilas">Total: <strong>R$ {it.totalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div>
                             </div>
 
-                            {/* Product SKU mapping dropdown */}
+                            {/* SKU manual mapper mapping tools */}
                             {mappingItemIdx === idx ? (
                               <div className="mt-2 p-3 bg-slate-50 rounded-lg border border-lilas/30 space-y-2 relative text-left">
                                 <span className="text-[9px] font-bold text-text-secondary uppercase">Pesquisar no Catálogo:</span>
@@ -950,7 +1005,7 @@ export const WhatsAppInbox: React.FC = () => {
                                       const emailClientName = selectedEmail.extractedFields.cliente_razao || selectedEmail.extractedFields.C7_RAZAO || selectedEmail.extractedFields.razao_social || selectedEmail.senderName;
                                       const resolvedProduct = catalog.find(p => p.code === selectedSkuCode);
 
-                                      // Save Mapping
+                                      // Save mapping globally
                                       await addDeParaMapping({
                                         id: `dp-${Math.floor(1000 + Math.random() * 9000)}`,
                                         incomingTerm: informalName,
@@ -964,11 +1019,10 @@ export const WhatsAppInbox: React.FC = () => {
                                         isActive: true
                                       });
 
-                                      // Resolve state locally
+                                      // Update in store
                                       useFlowStore.setState((state) => {
                                         const updatedEmails = state.emails.map((e) => {
                                           if (e.id !== selectedEmail.id) return e;
-                                          
                                           const product = state.catalog.find(p => p.code === selectedSkuCode);
                                           if (!product) return e;
 
@@ -988,12 +1042,7 @@ export const WhatsAppInbox: React.FC = () => {
                                           const status = hasPending ? e.status : 'Aguardando';
                                           const errorMessage = hasPending ? e.errorMessage : undefined;
 
-                                          return {
-                                            ...e,
-                                            items: newItems,
-                                            status,
-                                            errorMessage
-                                          };
+                                          return { ...e, items: newItems, status, errorMessage };
                                         });
 
                                         return { emails: updatedEmails };
@@ -1021,7 +1070,7 @@ export const WhatsAppInbox: React.FC = () => {
                                     className="px-2.5 py-1.5 text-[9px] font-bold rounded-lg bg-lilas text-white flex items-center gap-1 hover:bg-lilas/90 transition shadow-sm cursor-pointer"
                                   >
                                     <ArrowLeftRight size={10} />
-                                    <span>Resolver De-Para</span>
+                                    <span>Mapear SKU</span>
                                   </button>
                                 </div>
                               )
@@ -1034,7 +1083,7 @@ export const WhatsAppInbox: React.FC = () => {
                 )}
 
                 {rightPanelTab === 'logs' && (
-                  <div className="space-y-4">
+                  <div className="space-y-4 text-left">
                     <span className="text-[12px] font-bold text-text-primary block border-b border-border/20 pb-2">Payload Enviado ao ERP</span>
                     <pre className="bg-slate-950 p-3 rounded-xl font-mono text-[9px] text-[#A78BFA] leading-normal overflow-x-auto whitespace-pre">
                       {selectedEmail.erpPayloadSent || 'Nenhum payload enviado ainda.'}
@@ -1048,18 +1097,18 @@ export const WhatsAppInbox: React.FC = () => {
                 )}
               </div>
 
-              {/* Right Sidebar Footer Actions */}
+              {/* Right Panel Footer Integrations */}
               <div className="p-4 border-t border-border/30 bg-white/40 flex gap-2 shrink-0">
                 {selectedEmail.status === 'E-mail Geral' ? (
                   <button
                     onClick={() => {
                       updateEmailStatus(selectedEmail.id, 'Arquivado', 'Conversa arquivada pelo operador.');
-                      toast.success('Conversa arquivada com sucesso!');
+                      toast.success('Pedido geral arquivado com sucesso!');
                     }}
                     className="flex-1 py-3 px-4 rounded-xl bg-slate-500 hover:bg-slate-600 font-bold text-white text-[12px] flex items-center justify-center gap-2 shadow-sm transition cursor-pointer"
                   >
                     <Archive size={15} />
-                    <span>Arquivar Conversa</span>
+                    <span>Arquivar E-mail</span>
                   </button>
                 ) : (
                   <button
@@ -1072,7 +1121,7 @@ export const WhatsAppInbox: React.FC = () => {
                     ) : (
                       <Check size={15} />
                     )}
-                    {selectedEmail.status === 'Enviado ao ERP' ? 'Pedido Integrado no ERP' : 'Enviar Pedido ao ERP'}
+                    {selectedEmail.status === 'Enviado ao ERP' ? 'Integrado no ERP' : 'Enviar para o ERP'}
                   </button>
                 )}
 
@@ -1080,10 +1129,10 @@ export const WhatsAppInbox: React.FC = () => {
                   <button
                     onClick={() => {
                       updateEmailStatus(selectedEmail.id, 'Arquivado', 'Conversa arquivada pelo operador.');
-                      toast.success('Conversa arquivada!');
+                      toast.success('Pedido arquivado com sucesso!');
                     }}
                     className="py-3 px-3 rounded-xl border border-border bg-white/60 hover:bg-white text-text-secondary hover:text-text-primary text-[12px] font-bold transition cursor-pointer"
-                    title="Arquivar conversa"
+                    title="Arquivar e-mail"
                   >
                     <Archive size={15} />
                   </button>
@@ -1114,11 +1163,11 @@ export const WhatsAppInbox: React.FC = () => {
         ) : (
           <div className="flex-1 glass-panel rounded-2xl flex flex-col items-center justify-center p-8 text-center border border-border/40 bg-white/10">
             <div className="w-16 h-16 rounded-full bg-lilas/10 flex items-center justify-center text-lilas mb-4">
-              <MessageSquare size={26} className="text-lilas" />
+              <Inbox size={26} className="text-lilas" />
             </div>
-            <h3 className="text-sm font-bold text-text-secondary">Nenhuma conversa selecionada</h3>
+            <h3 className="text-sm font-bold text-text-secondary">Nenhum e-mail selecionado</h3>
             <p className="text-[12px] text-text-tertiary max-w-[320px] mt-1.5 leading-relaxed">
-              Escolha uma conversa ativa do WhatsApp na barra lateral para interagir com o cliente, resolver pendências de faturamento ou enviar para o ERP.
+              Escolha um e-mail de pedido na barra lateral para analisar o corpo do texto, resolver vínculos cadastrais de produtos/clientes ou autorizar o faturamento no ERP.
             </p>
           </div>
         )}
@@ -1126,4 +1175,5 @@ export const WhatsAppInbox: React.FC = () => {
     </div>
   );
 };
-export default WhatsAppInbox;
+
+export default EmailInbox;

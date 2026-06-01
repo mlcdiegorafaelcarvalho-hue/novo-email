@@ -586,7 +586,7 @@ const defaultEmails: EmailOrderData[] = [
     ],
     erpTarget: 'Bling',
     confidenceScore: 89,
-    attachmentName: 'ordem_compra_9988.pdf',
+    attachmentName: 'ordem_compra_9988.xlsx',
     isOpened: false,
     chatMessages: [
       { id: 'm2-1', sender: 'buyer', text: 'Bom dia, Precisamos dos seguintes produtos para reposição imediata:\n\n- 45 unidades de Caderno Tilibra 10mat\n- 10 unidades de Borracha Mercur\n\nCNPJ: 45.543.915/0001-81\nNúmero da Ordem: OC-9988\n\nFavor faturar em nosso CNPJ e enviar boleto.', timestamp: '27/05/2026 15:25' },
@@ -630,7 +630,7 @@ const defaultEmails: EmailOrderData[] = [
     erpTarget: 'Bling',
     confidenceScore: 65,
     errorMessage: 'CNPJ obrigatório não encontrado no pedido. Código de pedido não encontrado.',
-    attachmentName: 'cotacao_central_pinheiros.pdf',
+    attachmentName: 'cotacao_central_pinheiros.html',
     isOpened: false,
     chatMessages: [
       { id: 'm3-1', sender: 'buyer', text: 'Olá, Preciso de:\n3 un de Grampeador de Mesa Profissional 20fls Metal\n12 un de Grampos 26/6\n8 un de Fita Adesiva Larga\n\nNão tenho o número do CNPJ aqui de cabeça, mas faturem na nossa conta de costume por favor. Enviar com a transportadora Braspress.', timestamp: '27/05/2026 16:00' },
@@ -1819,7 +1819,10 @@ export const useFlowStore = create<FlowState>((set, get) => ({
     let senderEmail = email;
     let subject = `NOVO PEDIDO DE COMPRA - ${company.toUpperCase()}`;
     let rawBody = `Prezada Softeum,\n\nSolicitamos o faturamento dos seguintes itens conforme nossa cotação comercial:\n\n${rawItems.map((it) => `- ${it.quantity} un de ${it.rawDescription}`).join('\n')}\n\nEntregar no endereço cadastrado.\nFaturamento por boleto faturado.\n\nAbraços,\n${buyer}\nSuprimentos - ${company}`;
-    let attachmentName: string | undefined = `pedido_compra_${emailId.replace('email-', '')}.pdf`;
+    
+    const docExtensions = ['.pdf', '.xlsx', '.xls', '.html', '.htm', '.csv'];
+    const randomExt = docExtensions[Math.floor(Math.random() * docExtensions.length)];
+    let attachmentName: string | undefined = `pedido_compra_${emailId.replace('email-', '')}${randomExt}`;
     
     if (isNonOrder) {
       const nonOrderIdx = Math.floor(Math.random() * 4);
@@ -1916,8 +1919,8 @@ export const useFlowStore = create<FlowState>((set, get) => ({
         }
       }
 
-      toast.info(`Inbox Recebeu: Nova mensagem de "${senderName}".`, {
-        description: isFiltered ? filterReason : 'Mensagem geral recebida e classificada.',
+      toast.info(`Inbox Recebeu: Novo e-mail de "${senderName}".`, {
+        description: isFiltered ? filterReason : 'E-mail geral recebido e classificado.',
         duration: 4000
       });
       return;
@@ -2197,6 +2200,10 @@ export const useFlowStore = create<FlowState>((set, get) => ({
         chatMessages.push({ id: `msg-${emailId}-3`, sender: 'agent' as const, text: `Erro de faturamento: O ERP retornou erro de Timeout. Direcionando para atendimento humano.`, timestamp: formattedDate });
       }
 
+      const docExtensions = ['.pdf', '.xlsx', '.xls', '.html', '.htm', '.csv'];
+      const randomExt = docExtensions[Math.floor(Math.random() * docExtensions.length)];
+      const attachmentName = `pedido_compra_${emailId.replace('email-', '')}${randomExt}`;
+
       newEmails.push({
         id: emailId,
         senderName: buyer,
@@ -2212,6 +2219,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
         erpTarget: get().activeErp,
         confidenceScore,
         errorMessage,
+        attachmentName,
         isOpened: false,
         chatMessages
       });
@@ -2244,7 +2252,8 @@ export const useFlowStore = create<FlowState>((set, get) => ({
           raw_items: finalEmail.rawItems,
           erp_target: finalEmail.erpTarget,
           error_message: finalEmail.errorMessage || null,
-          confidence_score: finalEmail.confidenceScore
+          confidence_score: finalEmail.confidenceScore,
+          attachment_name: finalEmail.attachmentName
         }));
 
         await supabase.from('emails_orders').insert(dbInserts);

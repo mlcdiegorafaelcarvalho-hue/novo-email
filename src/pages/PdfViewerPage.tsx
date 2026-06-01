@@ -1,12 +1,18 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useFlowStore } from '../store/useFlowStore';
-import { Printer, Download, FileText, Sparkles } from 'lucide-react';
+import { Printer, Download, FileText, Sparkles, FileSpreadsheet, FileCode, File } from 'lucide-react';
 
 export const PdfViewerPage: React.FC = () => {
   const { emailId } = useParams<{ emailId: string }>();
   const emails = useFlowStore((state) => state.emails);
   const email = emails.find((e) => e.id === emailId);
+
+  useEffect(() => {
+    if (email) {
+      document.title = `${email.attachmentName || 'Documento'} | Visualizador de Documentos`;
+    }
+  }, [email]);
 
   if (!email) {
     return (
@@ -27,14 +33,45 @@ export const PdfViewerPage: React.FC = () => {
     window.print();
   };
 
+  // Dynamic attachment styling
+  const attachmentName = email.attachmentName || 'pedido_compra.pdf';
+  const ext = attachmentName.split('.').pop()?.toLowerCase() || 'pdf';
+
+  let docIcon = <FileText className="text-azul w-5 h-5" />;
+  let docBadge = 'OCR AUTOMÁTICO';
+  let badgeColor = 'bg-azul/20 text-azul';
+  let downloadLabel = 'Download PDF';
+
+  if (ext === 'xlsx' || ext === 'xls') {
+    docIcon = <FileSpreadsheet className="text-emerald-400 w-5 h-5" />;
+    docBadge = 'MAPEAMENTO EXCEL';
+    badgeColor = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+    downloadLabel = 'Download Excel';
+  } else if (ext === 'html' || ext === 'htm') {
+    docIcon = <FileCode className="text-blue-400 w-5 h-5" />;
+    docBadge = 'PARSING HTML';
+    badgeColor = 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
+    downloadLabel = 'Download HTML';
+  } else if (ext === 'csv') {
+    docIcon = <FileSpreadsheet className="text-amber-400 w-5 h-5" />;
+    docBadge = 'PARSING CSV';
+    badgeColor = 'bg-amber-500/20 text-amber-400 border border-amber-500/30';
+    downloadLabel = 'Download CSV';
+  } else if (ext !== 'pdf') {
+    docIcon = <File className="text-slate-400 w-5 h-5" />;
+    docBadge = `INTEGRAÇÃO ${ext.toUpperCase()}`;
+    badgeColor = 'bg-slate-500/20 text-slate-400 border border-slate-500/30';
+    downloadLabel = `Download ${ext.toUpperCase()}`;
+  }
+
   return (
     <div className="min-h-screen bg-slate-750 flex flex-col select-none">
-      {/* PDF Viewer Header Bar */}
+      {/* Document Viewer Header Bar */}
       <header className="bg-slate-900 text-white h-12 px-6 flex items-center justify-between border-b border-slate-800 shadow-md shrink-0">
         <div className="flex items-center gap-2.5">
-          <FileText className="text-azul w-5 h-5" />
-          <span className="text-xs font-bold font-mono tracking-wide">{email.attachmentName || 'pedido_compra.pdf'}</span>
-          <span className="px-1.5 py-0.5 rounded bg-azul/20 text-azul font-bold text-[8px]">OCR AUTOMÁTICO</span>
+          {docIcon}
+          <span className="text-xs font-bold font-mono tracking-wide">{attachmentName}</span>
+          <span className={`px-1.5 py-0.5 rounded font-bold text-[8px] ${badgeColor}`}>{docBadge}</span>
         </div>
 
         {/* Mocks toolbar */}
@@ -52,13 +89,13 @@ export const PdfViewerPage: React.FC = () => {
               const element = document.createElement("a");
               const file = new Blob([email.rawBody], {type: 'text/plain'});
               element.href = URL.createObjectURL(file);
-              element.download = email.attachmentName || "pedido.pdf";
+              element.download = attachmentName;
               document.body.appendChild(element);
               element.click();
               document.body.removeChild(element);
             }}
             className="p-1.5 rounded hover:bg-slate-800 hover:text-white transition flex items-center gap-1.5"
-            title="Download PDF"
+            title={downloadLabel}
           >
             <Download size={14} />
             <span className="hidden sm:inline">Download</span>

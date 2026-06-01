@@ -33,44 +33,49 @@ export const Settings: React.FC = () => {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'Admin' | 'Operador' | 'Visualizador'>('Operador');
 
-  // WhatsApp connector states
-  const [webhookUrl, setWebhookUrl] = useState('https://api.softeum.com.br/webhooks/whatsapp');
-  const [webhookToken, setWebhookToken] = useState('wh_token_88f918072120bc9e');
-  const [qrCodeSync, setQrCodeSync] = useState(true);
-  const [qrLoading, setQrLoading] = useState(false);
+  // Email connector states
+  const [imapHost, setImapHost] = useState(emailConnection.imapHost || 'imap.minhaempresa.com.br');
+  const [imapPort, setImapPort] = useState(emailConnection.imapPort || '993');
+  const [imapUser, setImapUser] = useState(emailConnection.imapUser || 'pedidos@minhaempresa.com.br');
+  const [imapPassword, setImapPassword] = useState(emailConnection.imapPassword || '••••••••••••');
+  const [testingConnection, setTestingConnection] = useState(false);
 
-  const handleGenerateQRCode = () => {
-    setQrLoading(true);
-    setQrCodeSync(false);
-    const loader = toast.loading('Gerando novo QR Code de autenticação...');
-    setTimeout(() => {
-      setQrLoading(false);
-      setQrCodeSync(true);
-      updateEmailConnection({
-        provider: 'IMAP', // fallback key
-        connected: true,
-        lastSyncTime: new Date().toLocaleString('pt-BR')
-      });
-      toast.dismiss(loader);
-      toast.success('QR Code gerado! Escaneie com seu WhatsApp para conectar o Agente.');
-    }, 1500);
-  };
-
-  const handleSaveWebhook = (e: React.FormEvent) => {
+  const handleSaveEmailConnection = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!webhookUrl || !webhookToken) {
-      toast.error('Preencha a URL de Webhook e o Token de Segurança.');
+    if (!imapHost || !imapPort || !imapUser) {
+      toast.error('Preencha os campos obrigatórios do servidor IMAP.');
       return;
     }
 
     updateEmailConnection({
       provider: 'IMAP',
       connected: true,
-      lastSyncTime: new Date().toLocaleString('pt-BR')
+      lastSyncTime: new Date().toLocaleString('pt-BR'),
+      imapHost,
+      imapPort,
+      imapUser,
+      imapPassword
     });
-    toast.success('Conectores e Webhook do WhatsApp salvos com sucesso!', {
-      description: 'Webhook ativado para recebimento em tempo real.'
-    });
+    toast.success('Configurações do servidor IMAP salvas com sucesso!');
+  };
+
+  const handleTestEmailConnection = () => {
+    setTestingConnection(true);
+    toast.promise(
+      new Promise((resolve) => setTimeout(resolve, 1500)),
+      {
+        loading: 'Testando credenciais do servidor de email...',
+        success: () => {
+          setTestingConnection(false);
+          updateEmailConnection({ connected: true, lastSyncTime: new Date().toLocaleString('pt-BR') });
+          return 'Conexão IMAP estabelecida com sucesso!';
+        },
+        error: () => {
+          setTestingConnection(false);
+          return 'Erro de conexão ou credenciais inválidas.';
+        }
+      }
+    );
   };
 
   const handleSaveCompany = (e: React.FormEvent) => {
@@ -248,16 +253,16 @@ export const Settings: React.FC = () => {
           </div>
 
 
-          {/* Section: WhatsApp Templates */}
+          {/* Section: Email Templates */}
           <div className="glass-panel p-5 rounded-2xl space-y-4">
             <div className="flex items-center gap-2 border-b border-border/40 pb-3">
-              <MessageSquare className="text-lilas" size={16} />
-              <span className="text-[13px] font-bold text-text-primary">Modelos de Mensagem do WhatsApp (Agente Inteligente)</span>
+              <Mail className="text-lilas" size={16} />
+              <span className="text-[13px] font-bold text-text-primary">Modelos de Respostas de E-mail (Agente Inteligente)</span>
             </div>
 
             <div className="space-y-4">
               <p className="text-xs text-text-secondary leading-relaxed">
-                Configure os textos padrões que o robô de IA enviará no chat do WhatsApp para interagir com o cliente. Use o marcador <code className="bg-black/5 px-1 py-0.5 rounded text-lilas font-bold">{`{cliente}`}</code> para inserir o nome do comprador dinamicamente.
+                Configure os textos padrões que o robô de IA enviará em resposta aos compradores por e-mail. Use o marcador <code className="bg-black/5 px-1 py-0.5 rounded text-lilas font-bold">{`{cliente}`}</code> para inserir o nome do comprador dinamicamente.
               </p>
 
               {/* Template Confirmar Pedido */}
@@ -295,15 +300,15 @@ export const Settings: React.FC = () => {
             </div>
           </div>
 
-          {/* Section: WhatsApp Connections */}
+          {/* Section: Email Connections */}
           <div className="glass-panel p-5 rounded-2xl space-y-4">
             <div className="flex items-center gap-2 border-b border-border/40 pb-3">
-              <Phone className="text-lilas" size={16} />
-              <span className="text-[13px] font-bold text-text-primary">Conectores de Entrada (WhatsApp Agent)</span>
+              <Server className="text-lilas" size={16} />
+              <span className="text-[13px] font-bold text-text-primary">Conectores de Entrada (Servidor IMAP)</span>
             </div>
 
             <p className="text-xs text-text-secondary leading-relaxed">
-              Integre seu agente virtual com o número oficial do WhatsApp. Escaneie o QR Code abaixo para autenticar o robô ou configure a URL de Webhook de recebimento.
+              Integre seu agente virtual com a caixa postal corporativa de recebimento de pedidos.
             </p>
 
             {/* Current Status Widget */}
@@ -320,10 +325,10 @@ export const Settings: React.FC = () => {
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[12px] font-bold">
-                    {emailConnection.connected ? 'WhatsApp API Ativa & Conectada' : 'Robô Desconectado'}
+                    {emailConnection.connected ? 'Conexão IMAP Ativa & Monitorando' : 'Monitoramento Inativo'}
                   </span>
                   <span className="text-[9px] text-text-tertiary mt-0.5">
-                    {emailConnection.lastSyncTime ? `Última comunicação: ${emailConnection.lastSyncTime}` : 'Nunca sincronizado'}
+                    {emailConnection.lastSyncTime ? `Última sincronização: ${emailConnection.lastSyncTime}` : 'Nunca sincronizado'}
                   </span>
                 </div>
               </div>
@@ -333,97 +338,78 @@ export const Settings: React.FC = () => {
                   type="button"
                   onClick={() => {
                     updateEmailConnection({ connected: false });
-                    toast.info('Instância do WhatsApp desconectada.');
+                    toast.info('Instância IMAP desconectada.');
                   }}
                   className="px-2.5 py-1.5 rounded-lg border border-error/30 hover:bg-error/10 text-error text-[10px] font-bold transition cursor-pointer"
                 >
-                  Desconectar Instância
+                  Desconectar
                 </button>
               )}
             </div>
 
-            {/* QR Code Synchronization Simulation */}
-            <div className="p-4 rounded-xl border border-border/40 bg-white/40 flex flex-col items-center gap-3 text-center">
-              <span className="text-[11px] font-bold text-text-secondary uppercase">Autenticar via QR Code</span>
-              
-              {qrLoading ? (
-                <div className="w-40 h-40 border border-border/60 rounded-xl flex flex-col items-center justify-center gap-2 bg-white/60">
-                  <RefreshCw className="animate-spin text-lilas" size={24} />
-                  <span className="text-[10px] font-bold text-text-tertiary">Gerando token...</span>
+            {/* IMAP Connection form */}
+            <form onSubmit={handleSaveEmailConnection} className="space-y-3.5">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2 flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-text-secondary">Servidor Host IMAP</label>
+                  <input
+                    type="text"
+                    className="p-2 border border-border/60 bg-white/60 focus:bg-white rounded-lg focus:outline-none focus:border-lilas text-xs font-semibold text-text-primary"
+                    value={imapHost}
+                    onChange={(e) => setImapHost(e.target.value)}
+                  />
                 </div>
-              ) : qrCodeSync && emailConnection.connected ? (
-                <div className="flex flex-col items-center gap-2">
-                  {/* Styled Mock QR Code using CSS borders */}
-                  <div className="w-40 h-40 border-4 border-slate-900 rounded-xl p-3 bg-white flex flex-wrap gap-0.5 justify-center items-center shadow-md relative">
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="bg-[#25D366] text-white p-1.5 rounded-full shadow-md">
-                        <Phone size={16} />
-                      </div>
-                    </div>
-                    {/* Inner blocks mock */}
-                    <div className="w-10 h-10 border-4 border-slate-950 absolute top-2 left-2"></div>
-                    <div className="w-10 h-10 border-4 border-slate-950 absolute top-2 right-2"></div>
-                    <div className="w-10 h-10 border-4 border-slate-950 absolute bottom-2 left-2"></div>
-                    <div className="w-4 h-4 bg-slate-950 absolute bottom-5 right-5"></div>
-                    <div className="w-2 h-8 bg-slate-950 absolute top-14 left-14"></div>
-                    <div className="w-8 h-2 bg-slate-950 absolute top-14 left-14"></div>
-                  </div>
-                  <span className="text-[10px] text-success font-bold flex items-center gap-1 mt-1">
-                    <Check size={12} /> Instância Vinculada com Sucesso
-                  </span>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-text-secondary">Porta</label>
+                  <input
+                    type="text"
+                    className="p-2 border border-border/60 bg-white/60 focus:bg-white rounded-lg focus:outline-none focus:border-lilas text-xs font-semibold text-text-primary"
+                    value={imapPort}
+                    onChange={(e) => setImapPort(e.target.value)}
+                  />
                 </div>
-              ) : (
-                <div className="w-40 h-40 border border-dashed border-border/80 rounded-xl flex flex-col items-center justify-center gap-1.5 bg-black/[0.01]">
-                  <Phone className="text-text-tertiary/40" size={24} />
-                  <span className="text-[9px] text-text-tertiary font-semibold max-w-[120px]">QR Code expirado.</span>
-                </div>
-              )}
+              </div>
 
-              <button
-                type="button"
-                onClick={handleGenerateQRCode}
-                className="py-1.5 px-3 rounded-lg border border-lilas/40 bg-lilas/5 hover:bg-lilas text-lilas hover:text-white text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
-              >
-                <RefreshCw size={11} />
-                Regerar QR Code
-              </button>
-            </div>
-
-            <div className="relative flex py-2 items-center">
-              <div className="flex-grow border-t border-border/30"></div>
-              <span className="flex-shrink mx-4 text-[9px] text-text-tertiary font-bold uppercase tracking-wider">ou Configurar Webhook</span>
-              <div className="flex-grow border-t border-border/30"></div>
-            </div>
-
-            {/* Webhook Configuration form */}
-            <form onSubmit={handleSaveWebhook} className="space-y-3.5">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold text-text-secondary">Webhook URL de Recebimento</label>
+                <label className="text-[10px] font-bold text-text-secondary">E-mail / Usuário</label>
                 <input
-                  type="text"
-                  className="p-2 border border-border/60 bg-white/60 focus:bg-white rounded-lg focus:outline-none focus:border-lilas text-xs font-semibold"
-                  value={webhookUrl}
-                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  type="email"
+                  className="p-2 border border-border/60 bg-white/60 focus:bg-white rounded-lg focus:outline-none focus:border-lilas text-xs font-semibold text-text-primary"
+                  value={imapUser}
+                  onChange={(e) => setImapUser(e.target.value)}
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold text-text-secondary">Token de Segurança (Bearer Auth)</label>
+                <label className="text-[10px] font-bold text-text-secondary">Senha de Acesso</label>
                 <input
-                  type="text"
-                  className="p-2 border border-border/60 bg-white/60 focus:bg-white rounded-lg focus:outline-none focus:border-lilas text-xs font-semibold"
-                  value={webhookToken}
-                  onChange={(e) => setWebhookToken(e.target.value)}
+                  type="password"
+                  className="p-2 border border-border/60 bg-white/60 focus:bg-white rounded-lg focus:outline-none focus:border-lilas text-xs font-semibold text-text-primary"
+                  value={imapPassword}
+                  onChange={(e) => setImapPassword(e.target.value)}
                 />
               </div>
 
-              <button
-                type="submit"
-                className="w-full py-2.5 rounded-xl border border-lilas/40 bg-lilas/5 hover:bg-lilas text-lilas hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <ShieldCheck size={14} />
-                Salvar e Ativar Webhook
-              </button>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={testingConnection}
+                  onClick={handleTestEmailConnection}
+                  className="flex-1 py-2.5 rounded-xl border border-border hover:bg-black/5 text-text-secondary text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className={testingConnection ? 'animate-spin' : ''} size={14} />
+                  Testar Conexão
+                </button>
+
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rosa to-azul hover:opacity-95 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Check size={14} />
+                  Salvar Conexão
+                </button>
+              </div>
             </form>
           </div>
 

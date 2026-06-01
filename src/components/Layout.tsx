@@ -101,8 +101,8 @@ export const Layout: React.FC = () => {
 
   const handleSimulateSingle = () => {
     receiveSimulatedEmail();
-    toast.success('Novo chat de WhatsApp recebido na Inbox!', {
-      description: 'A IA está extraindo os campos e respondendo em tempo real.',
+    toast.success('Novo e-mail de pedido recebido na Inbox!', {
+      description: 'A IA está extraindo os campos e processando em tempo real.',
       duration: 3500,
     });
   };
@@ -112,7 +112,7 @@ export const Layout: React.FC = () => {
     setTimeout(() => {
       triggerBatchSimulation(100);
       toast.dismiss(loader);
-      toast.success('Lote de 100 chats do WhatsApp simulado com sucesso!', {
+      toast.success('Lote de 100 e-mails de pedidos simulado com sucesso!', {
         description: 'Dados populados e processados em lote no Painel.',
         duration: 4000,
       });
@@ -158,7 +158,7 @@ export const Layout: React.FC = () => {
             <div className="hidden lg:flex items-center gap-3.5 mr-2 text-[12px] font-medium border-r border-border/50 pr-4">
               <div className="flex items-center gap-1.5 text-success">
                 <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
-                <span>WhatsApp API Conectada</span>
+                <span>Conector IMAP Ativo</span>
               </div>
               <div className="flex items-center gap-1.5 text-success">
                 <span className="w-2 h-2 rounded-full bg-success" />
@@ -187,7 +187,7 @@ export const Layout: React.FC = () => {
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white/80 hover:bg-white border border-border hover:border-azul text-text-secondary hover:text-text-primary text-[12px] font-medium shadow-sm transition"
               >
                 <Play size={14} className="text-azul fill-azul/20" />
-                <span>+1 Chat (Pedido)</span>
+                <span>+1 E-mail (Pedido)</span>
               </button>
 
               <button
@@ -215,15 +215,15 @@ export const Layout: React.FC = () => {
                       valor_total: '450.00'
                     }
                   });
-                  toast.warning('Simulado chat de cliente sem De-Para cadastrado!', {
+                  toast.warning('Simulado e-mail de cliente sem De-Para cadastrado!', {
                     description: 'Verifique a aba de Revisão Manual na Inbox.'
                   });
                 }}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white/80 hover:bg-white border border-border hover:border-warning text-text-secondary hover:text-text-primary text-[12px] font-medium shadow-sm transition"
-                title="Simular chat com CNPJ/Telefone desconhecido"
+                title="Simular e-mail com CNPJ desconhecido"
               >
                 <Play size={14} className="text-warning fill-warning/20" />
-                <span>+1 Chat (Sem De-Para)</span>
+                <span>+1 E-mail (Sem Cadastro)</span>
               </button>
 
               <button
@@ -275,12 +275,12 @@ export const Layout: React.FC = () => {
                     ],
                     confidenceScore: 72
                   });
-                  toast.warning('Simulado chat com produtos sem De-Para cadastrado!', {
+                  toast.warning('Simulado e-mail com produtos sem De-Para cadastrado!', {
                     description: 'Verifique a aba de Revisão Manual na Inbox.'
                   });
                 }}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white/80 hover:bg-white border border-border hover:border-lilas text-text-secondary hover:text-text-primary text-[12px] font-medium shadow-sm transition"
-                title="Simular chat com produtos sem mapeamento"
+                title="Simular e-mail com produtos sem mapeamento"
               >
                 <Play size={14} className="text-lilas fill-lilas/20" />
                 <span>+1 Prod Sem De-Para</span>
@@ -291,15 +291,15 @@ export const Layout: React.FC = () => {
                   receiveSimulatedEmail({
                     status: 'E-mail Geral'
                   });
-                  toast.info('Simulado chat de assunto geral na Inbox!', {
-                    description: 'IA não consumida para esta mensagem.'
+                  toast.info('Simulado e-mail de assunto geral na Inbox!', {
+                    description: 'IA não consumida para este e-mail.'
                   });
                 }}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white/80 hover:bg-white border border-border hover:border-text-secondary text-text-secondary hover:text-text-primary text-[12px] font-medium shadow-sm transition"
-                title="Simular chat geral (sem pedido)"
+                title="Simular e-mail geral (sem pedido)"
               >
                 <Play size={14} className="text-text-secondary fill-text-secondary/20" />
-                <span>+1 Chat Geral</span>
+                <span>+1 E-mail Geral</span>
               </button>
 
               <button
@@ -309,7 +309,7 @@ export const Layout: React.FC = () => {
                     senderEmail: 'contato@remetentedesconhecido.com',
                     subject: 'SOLICITAÇÃO DE ORDEM - ARQUIVO CORROMPIDO',
                     status: 'Revisão Manual',
-                    errorMessage: 'Falha Crítica de Leitura: A inteligência artificial não conseguiu extrair os campos da mensagem do WhatsApp. Todos os campos obrigatórios estão vazios.',
+                    errorMessage: 'Falha Crítica de Leitura: A inteligência artificial não conseguiu extrair os campos do e-mail. Todos os campos obrigatórios estão vazios.',
                     extractedFields: {
                       codigo_pedido: '',
                       cliente_cnpj: '',
@@ -342,12 +342,12 @@ export const Layout: React.FC = () => {
                     confidenceScore: 0,
                     attachmentName: 'pedido_corrompido.pdf'
                   });
-                  toast.error('Simulado chat com falha crítica de leitura!', {
+                  toast.error('Simulado e-mail com falha crítica de leitura!', {
                     description: 'Verifique a aba de Revisão Manual na Inbox.'
                   });
                 }}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white/80 hover:bg-white border border-border hover:border-error text-text-secondary hover:text-text-primary text-[12px] font-medium shadow-sm transition"
-                title="Simular chat com erro crítico de leitura"
+                title="Simular e-mail com erro crítico de leitura"
               >
                 <Play size={14} className="text-error fill-error/20" />
                 <span>+1 Falha Leitura</span>
@@ -358,7 +358,7 @@ export const Layout: React.FC = () => {
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-lilas to-azul hover:from-lilas/90 hover:to-azul/90 text-white text-[12px] font-semibold shadow-sm transition"
               >
                 <Layers size={14} />
-                <span>+100 Chats Lote</span>
+                <span>+100 E-mails Lote</span>
               </button>
             </div>
             )}
